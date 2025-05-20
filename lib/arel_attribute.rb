@@ -32,6 +32,7 @@ module ArelAttribute
     end
 
     module ClassMethods
+      # blocks are not finished
       def define_linked_attribute(name, type, &block)
         # when block is nil:
         #   we are reusing this for arel. just want to define a type
@@ -55,7 +56,7 @@ module ArelAttribute
           # the type information is read from the model/relation and not from the attribute
           # so we need to put it into the model
           attribute_types[name] = type
-          # arel only attributes did not set the value (a block)
+          # arel only attributes did not pass a value (this is a block)
           if value
             # bad stuff follows:
             # we should be calling define_attribute instead of cherry picking it
@@ -69,11 +70,6 @@ module ArelAttribute
 
       def arel_table # :nodoc:
         @arel_table ||= ArelAttribute::TableProxy.new(table_name, :klass => self)
-      end
-      # private. use arel_table[name] instead
-      def arel_attribute(name, table = arel_table) # :nodoc:
-        arell = arel_aliases[name.to_s]
-        Arel::Nodes::ArelAttribute.new(arell[table], name.to_s, table) if arell
       end
     end
   end

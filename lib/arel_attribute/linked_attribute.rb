@@ -4,13 +4,18 @@
 require "active_model/attribute/user_provided_default"
 
 # we really should not be doing this.
-# all other attributes only reference the record in hand
-# this ties into the rest of the record
+# all other attributes only reference the attribute passed from the db
+# this ties into the rest of the record's attributes
+# But composite attributes have a getter return multiple columns
+# we want multiple getters to access a single column
 
+# TODO: think I wanted to put caching back in and make closer to original
+# to do this, we'd have #clear_cache (called by the setter of the linked attributes)
 module ArelAttribute
   class LinkedAttribute < ActiveModel::Attribute::UserProvidedDefault
+    # Again, this goes against the way active record works
     # so we can set the lamba later
-    rw :rec
+    attr_accessor :rec
     def initialize(name, value, type)
       # @user_provided_value = value ## part of super. add if changing to FromUser
       # value(default, lambda) and database value are not present
