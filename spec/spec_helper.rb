@@ -1,5 +1,12 @@
 if ENV['CI']
-  require 'simplecov'
+  require "simplecov"
+  require "simplecov-html"
+  require "simplecov-json"
+
+  SimpleCov.formatter = SimpleCov::Formatter::MultiFormatter.new([
+    SimpleCov::Formatter::HTMLFormatter,
+    SimpleCov::Formatter::JSONFormatter
+  ])
   SimpleCov.start do
     add_filter %r{^/spec/}
   end

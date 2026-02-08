@@ -73,12 +73,12 @@ jobs:
     - name: run sqlite tests
       env:
         DB: sqlite3
-      run: bundle exec rake
+      run: bundle exec rake spec
     - name: run pg tests
       env:
         DB: pg
-      run: bundle exec rake db:create
+      run: bundle exec rake db:create spec
     - name: run mysql tests
       env:
         DB: mysql2
-      run: bundle exec rake db:create
+      run: bundle exec rake db:create spec
