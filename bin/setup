@@ -5,4 +5,12 @@ set -vx
 
 bundle install
 
-# Do any other automated setup that you need to do here
+# if you are having trouble with the privileges on this database:
+# DB=arel_attribute
+# MYUSER=user
+# PASSWORD=password
+# mysql -u root -e \n
+#   "CREATE MYUSER '$MUSER'@'localhost' IDENTIFIED BY '$PASSWORD'; GRANT ALL PRIVILEGES ON ${DB}.* TO '$MYUSER'@'localhost';"
+
+DB=pg rake db:create
+DB=mysql rake db:create

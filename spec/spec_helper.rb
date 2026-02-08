@@ -1,10 +1,11 @@
 if ENV['CI']
   require 'simplecov'
-  SimpleCov.start
+  SimpleCov.start do
+    add_filter %r{^/spec/}
+  end
 end
 
-$LOAD_PATH.unshift(File.dirname(__FILE__) + '/../lib')
-
+$LOAD_PATH.unshift File.expand_path("../../lib", __dir__)
 require "bundler/setup"
 require "arel_attribute"
 require "database_cleaner/active_record"
@@ -26,7 +27,7 @@ RSpec.configure do |config|
 
   config.before(:suite) do
     puts "\e[93mUsing database adapter #{Database.adapter}\e[0m"
-    Database.new.setup.migrate
+    Database.new.migrate
 
     # truncate at startup
     DatabaseCleaner.clean_with :truncation
