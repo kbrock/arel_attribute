@@ -1,5 +1,6 @@
 class VirtualTotalTestBase < ActiveRecord::Base
   self.abstract_class = true
+  self.belongs_to_required_by_default = false
 
   include ArelAttribute::Base
   include ArelAttribute::VirtualTotal
@@ -7,7 +8,7 @@ end
 
 class Author < VirtualTotalTestBase
   # basically a :parent_id relationship
-  belongs_to :teacher, :foreign_key => :teacher_id, :class_name => "Author"
+  belongs_to :teacher, :foreign_key => :teacher_id, :class_name => "Author", :optional => true
   has_many :students, :foreign_key => :teacher_id, :class_name => "Author"
   has_many :books
   has_many :ordered_books,   -> { ordered },   :class_name => "Book"
@@ -74,6 +75,10 @@ class Author < VirtualTotalTestBase
   def name_no_group
     has_attribute?("name_no_group") ? self["name_no_group"] : nickname || name
   end
+
+  # simple arel attributes for testing basic functionality
+  define_arel_attribute(:doubled, :integer) { |t| t[:teacher_id] + t[:teacher_id] }
+  define_arel_attribute(:upper_name, :string) { |t| Arel::Nodes::NamedFunction.new("UPPER", [t[:name]]) }
 
   # a (local) virtual_attribute without a uses, but with arel
   virtual_attribute :nick_or_name, :string, :arel => (lambda do |t|
@@ -185,4 +190,91 @@ end
 
 class Photo < VirtualTotalTestBase
   belongs_to :imageable, :polymorphic => true
+end
+
+class Person < ActiveRecord::Base
+  include ArelAttribute::Base
+  include ArelAttribute::SqlDetection
+
+  class << self
+    private
+
+    def sql_fn(name, *args)
+      Arel::Nodes::NamedFunction.new(name, args)
+    end
+
+    def sql_cast(expr, type)
+      Arel::Nodes::NamedFunction.new("CAST", [Arel.sql("#{expr.to_sql} AS #{type}")])
+    end
+
+    def sql_position(str, sub)
+      is_pg? ? sql_fn("STRPOS", str, sub) : sql_fn("INSTR", str, sub)
+    end
+
+    def sql_case_root(path, root_val, not_root)
+      Arel::Nodes::Case.new(path).when(Arel.sql("'/'")).then(root_val).else(not_root)
+    end
+  end
+
+  # root_id: first id in the path, e.g. "/1/2/3/" => 1
+  define_arel_attribute :root_id, :integer do |t|
+    path = t[:path]
+    stripped = sql_fn("LTRIM", path, Arel.sql("'/'"))
+    len = sql_position(stripped, Arel.sql("'/'")) - 1
+    segment = sql_fn("SUBSTR", path, 2, len)
+    sql_case_root(path, t[:id], sql_cast(segment, "INTEGER"))
+  end
+
+  # parent_id: last id in the path, e.g. "/1/2/3/" => 3
+  define_arel_attribute :parent_id, :integer do |t|
+    path = t[:path]
+    slash = Arel.sql("'/'")
+    empty = Arel.sql("''")
+    non_slash_chars = sql_fn("REPLACE", path, slash, empty)
+    front = sql_fn("RTRIM", sql_fn("RTRIM", path, slash), non_slash_chars)
+    last_segment = sql_fn("RTRIM", sql_fn("REPLACE", path, front, empty), slash)
+    sql_case_root(path, Arel.sql("NULL"), sql_cast(last_segment, "INTEGER"))
+  end
+
+  # child_path: path children would have, e.g. id=2, path="/1/" => "/1/2/"
+  define_arel_attribute :child_path, :string do |t|
+    Arel::Nodes::Concat.new(
+      Arel::Nodes::Concat.new(t[:path], t[:id]),
+      Arel.sql("'/'")
+    )
+  end
+
+  def root_id
+    has_attribute?("root_id") ? self["root_id"] : (ids = path_ids; ids.empty? ? id : ids.first)
+  end
+
+  def parent_id
+    has_attribute?("parent_id") ? self["parent_id"] : (ids = path_ids; ids.empty? ? nil : ids.last)
+  end
+
+  def child_path
+    has_attribute?("child_path") ? self["child_path"] : "#{path}#{id}/"
+  end
+
+  belongs_to :root, foreign_key: :root_id, class_name: "Person", optional: true
+  belongs_to :parent, foreign_key: :path, primary_key: :child_path, class_name: "Person",
+                      inverse_of: :children, optional: true
+  has_many :children, foreign_key: :path, primary_key: :child_path, class_name: "Person",
+                      inverse_of: :parent
+  has_many :siblings, foreign_key: :path, primary_key: :path, class_name: "Person"
+
+  scope :roots, -> { where(path: "/") }
+
+  def self.factory(count = 3, start: "a".ord)
+    count.times.inject([]) do |ac, i|
+      ac << create!(name: (start + i).chr, path: ac.last&.child_path || "/")
+    end
+  end
+
+  private
+
+  def path_ids
+    return [] if path.blank? || path == "/"
+    path[1..].split("/").map(&:to_i)
+  end
 end

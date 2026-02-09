@@ -9,6 +9,11 @@ ActiveRecord::Schema.define(:version => 0) do
     t.string   "nickname"
   end
 
+  create_table "people", :force => true do |t|
+    t.string   "path", :null => false, :default => "/"
+    t.string   "name"
+  end
+
   create_table "books", :force => true do |t|
     t.references "author", :index => true
     t.string     "author_type", :default => "Author"
