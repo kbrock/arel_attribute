@@ -82,13 +82,13 @@ class Author < VirtualTotalTestBase
 
   # a (local) virtual_attribute without a uses, but with arel
   virtual_attribute :nick_or_name, :string, :arel => (lambda do |t|
-    t.grouping(Arel::Nodes::NamedFunction.new('COALESCE', [t[:nickname], t[:name]]))
+    t.grouping(Arel::Nodes::NamedFunction.new("COALESCE", [t[:nickname], t[:name]]))
   end)
 
   # We did not support arel returning something other than Grouping.
   # this is here to test what happens when we do
   virtual_attribute :name_no_group, :string, :arel => (lambda do |t|
-    Arel::Nodes::NamedFunction.new('COALESCE', [t[:nickname], t[:name]])
+    Arel::Nodes::NamedFunction.new("COALESCE", [t[:nickname], t[:name]])
   end)
 
   # def first_book_name
@@ -245,11 +245,23 @@ class Person < ActiveRecord::Base
   end
 
   def root_id
-    has_attribute?("root_id") ? self["root_id"] : (ids = path_ids; ids.empty? ? id : ids.first)
+    if has_attribute?("root_id")
+      self["root_id"]
+    else
+      # NOTE: this is a special case
+      ids = path_ids
+      ids.empty? ? id : ids.first
+    end
   end
 
   def parent_id
-    has_attribute?("parent_id") ? self["parent_id"] : (ids = path_ids; ids.empty? ? nil : ids.last)
+    if has_attribute?("parent_id")
+      self["parent_id"]
+    else
+      # NOTE: this is different from root_id handling
+      ids = path_ids
+      ids.empty? ? nil : ids.last
+    end
   end
 
   def child_path

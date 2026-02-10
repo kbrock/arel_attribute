@@ -44,7 +44,7 @@ module ArelAttribute
 
       def virtual_average(name, relation, column, options = {})
         define_virtual_aggregate_attribute(name, relation, :average, column, options)
-        define_virtual_aggregate_method(name, relation, column, :average) { |values| values.count == 0 ? 0 : values.sum / values.count }
+        define_virtual_aggregate_method(name, relation, column, :average) { |values| (values.count == 0) ? 0 : values.sum / values.count }
       end
 
       def define_virtual_aggregate_attribute(name, relation, method_name, column, options)
@@ -92,8 +92,8 @@ module ArelAttribute
           column = reflection.klass.arel_table[column] unless column.respond_to?(:count)
 
           # query: SELECT COUNT(*) FROM main_table JOIN foreign_table ON main_table.id = foreign_table.id JOIN ...
-          relation_query   = joins(reflection.name).select(column.send(method_name))
-          query            = relation_query.arel
+          relation_query = joins(reflection.name).select(column.send(method_name))
+          query = relation_query.arel
 
           # algorithm:
           # - remove main_table from this sub query. (it is already in the primary query)
@@ -108,7 +108,7 @@ module ArelAttribute
           query.where(join.right.expr)
 
           # add coalesce to ensure correct value comes out
-          Arel::Nodes::NamedFunction.new('COALESCE', [t.grouping(query), Arel.sql("0")])
+          Arel::Nodes::NamedFunction.new("COALESCE", [t.grouping(query), Arel.sql("0")])
         end
       end
     end

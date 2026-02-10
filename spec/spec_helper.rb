@@ -1,5 +1,12 @@
-if ENV['CI']
-  require 'simplecov'
+if ENV["CI"]
+  require "simplecov"
+  require "simplecov-html"
+  require "simplecov-json"
+
+  SimpleCov.formatter = SimpleCov::Formatter::MultiFormatter.new([
+    SimpleCov::Formatter::HTMLFormatter,
+    SimpleCov::Formatter::JSONFormatter
+  ])
   SimpleCov.start do
     add_filter %r{^/spec/}
   end
@@ -11,7 +18,7 @@ require "arel_attribute"
 require "database_cleaner/active_record"
 require "db-query-matchers"
 
-Dir['./spec/support/**/*.rb'].sort.each { |f| require f }
+Dir["./spec/support/**/*.rb"].sort.each { |f| require f }
 
 RSpec.configure do |config|
   # Enable flags like --only-failures and --next-failure

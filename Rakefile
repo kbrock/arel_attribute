@@ -21,7 +21,7 @@ namespace :db do
 end
 
 RSpec::Core::RakeTask.new(:spec) do |task|
-  task.pattern = 'spec/*_spec.rb'
+  task.pattern = "spec/*_spec.rb"
 end
 
 # require "standard/rake"
