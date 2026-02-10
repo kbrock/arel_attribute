@@ -1,27 +1,84 @@
 name: Ruby
-
 on:
   push:
-    branches:
-      - master
-
+    branches-ignore:
+    - dependabot/*
+    - renovate/*
   pull_request:
-
+  schedule:
+  - cron: 0 0 * * 0
+  workflow_dispatch:
+concurrency:
+  group: "${{ github.workflow }}-${{ github.ref }}"
+  cancel-in-progress: true
+permissions:
+  contents: read
 jobs:
-  build:
+  test:
+    services:
+      postgres:
+        image: postgres:13
+        env:
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: arel_attribute_test
+        ports:
+          - "5432:5432"
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      mysql:
+          image: mysql:8.0
+          env:
+            MYSQL_ROOT_PASSWORD: password
+            MYSQL_DATABASE: arel_attribute_test
+          ports:
+            - "3306:3306"
+          options: >-
+            --health-cmd="mysqladmin ping"
+            --health-interval=10s
+            --health-timeout=5s
+            --health-retries=3
     runs-on: ubuntu-latest
-    name: Ruby ${{ matrix.ruby }}
+    name: "${{ matrix.gemfile }} / Ruby ${{ matrix.ruby }}"
     strategy:
+      fail-fast: false
       matrix:
-        ruby:
-          - '3.0.3'
-
+        ruby: ["3.3", "3.4"]
+        gemfile:
+          - gemfile_81
+        include:
+          - ruby: "3.3"
+            gemfile: gemfile_72
+          - ruby: "3.3"
+            gemfile: gemfile_80
+          - ruby: "head"
+            gemfile: rails_edge
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: password
+      MYSQL_HOST: 127.0.0.1
+      MYSQL_PWD: password
+      BUNDLE_GEMFILE: gemfiles/${{ matrix.gemfile }}.gemfile
     steps:
-    - uses: actions/checkout@v3
-    - name: Set up Ruby
+    - uses: actions/checkout@v6
+    - name: Setup Ruby
       uses: ruby/setup-ruby@v1
       with:
         ruby-version: ${{ matrix.ruby }}
         bundler-cache: true
-    - name: Run the default task
+    - name: run sqlite tests
+      env:
+        DB: sqlite3
       run: bundle exec rake
+    - name: run pg tests
+      env:
+        DB: pg
+      run: bundle exec rake db:create
+    - name: run mysql tests
+      env:
+        DB: mysql2
+      run: bundle exec rake db:create

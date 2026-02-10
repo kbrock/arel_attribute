@@ -29,10 +29,10 @@ Gem::Specification.new do |spec|
   spec.executables = spec.files.grep(%r{\Aexe/}) { |f| File.basename(f) }
   spec.require_paths = ["lib"]
 
-#  spec.add_runtime_dependency "active_support"
-#  spec.add_runtime_dependency "active_record"
-  spec.add_runtime_dependency "rails" #kiss for now (since it is using rails head)
+  spec.add_runtime_dependency "activerecord", ">= 7.1"
+  spec.add_runtime_dependency "activesupport", ">= 7.1"
 
+  spec.add_development_dependency "appraisal"
   spec.add_development_dependency "byebug"
   spec.add_development_dependency "database_cleaner-active_record", "~> 2.1"
   spec.add_development_dependency "db-query-matchers"
