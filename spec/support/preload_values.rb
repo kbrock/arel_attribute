@@ -25,9 +25,9 @@ RSpec::Matchers.define :preload_values do |field, expected_values|
 
     counter = DBQueryMatchers::QueryCounter.new
     @field = field
-    @count = ActiveSupport::Notifications.subscribed(counter.to_proc, 'sql.active_record') do
+    @count = ActiveSupport::Notifications.subscribed(counter.to_proc, "sql.active_record") do
       if records.respond_to?(:map)
-        expected_values = Array.new(records.size, expected_values) unless expected_values.kind_of?(Array)
+        expected_values = Array.new(records.size, expected_values) unless expected_values.is_a?(Array)
         actual = records.map { |record| record.send(field) }
       else
         actual = records.send(field)

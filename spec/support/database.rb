@@ -6,10 +6,10 @@ class Database
   VALID_ADAPTERS = %w[sqlite3 postgresql mysql2].freeze
 
   def self.adapter
-    case ENV.fetch('DB', "sqlite")
-    when "sqlite", "sqlite3" then ENV['DB'] = "sqlite3"
-    when "pg", "postgresql"  then ENV['DB'] = "postgresql"
-    when "mysql", "mysql2"   then ENV['DB'] = "mysql2"
+    case ENV.fetch("DB", "sqlite")
+    when "sqlite", "sqlite3" then ENV["DB"] = "sqlite3"
+    when "pg", "postgresql" then ENV["DB"] = "postgresql"
+    when "mysql", "mysql2" then ENV["DB"] = "mysql2"
     else
       raise "ENV['DB'] value invalid, must be one of: #{VALID_ADAPTERS.join(", ")}"
     end
@@ -33,14 +33,14 @@ class Database
   end
 
   def create
-    ActiveRecord::Base.establish_connection(connection_options.except('database'))
-    ActiveRecord::Base.connection.create_database(connection_options['database'])
+    ActiveRecord::Base.establish_connection(connection_options.except("database"))
+    ActiveRecord::Base.connection.create_database(connection_options["database"])
     self
   end
 
   def drop
-    ActiveRecord::Base.establish_connection(connection_options.except('database'))
-    ActiveRecord::Base.connection.drop_database(connection_options['database'])
+    ActiveRecord::Base.establish_connection(connection_options.except("database"))
+    ActiveRecord::Base.connection.drop_database(connection_options["database"])
     self
   end
 

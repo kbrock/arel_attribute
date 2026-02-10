@@ -18,7 +18,8 @@ module ArelAttribute
     def self.included(base)
       base.extend ClassMethods
       base.include InstanceMethods
-#      base.include ArelAttribute::VirtualTotal
+      # double check backwards compatibility
+      # base.include ArelAttribute::VirtualTotal
       # name => arel_block (lambda that takes an arel table, returns an arel node)
       base.class_attribute :arel_aliases, instance_accessor: false, default: {}
       # name => type (symbol like :integer, or an ActiveModel::Type instance)

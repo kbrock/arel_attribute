@@ -7,7 +7,7 @@ module ArelAttribute
 
     module ClassMethods
       def is_pg?
-        %w(postgresql pg).include?(connection.adapter_name.downcase)
+        %w[postgresql pg].include?(connection.adapter_name.downcase)
       end
     end
   end

@@ -146,8 +146,8 @@ RSpec.describe ArelAttribute do
 
     it "chains select, where, and order" do
       results = Author.select(:id, :doubled, :upper_name)
-                       .where(upper_name: "HELLO")
-                       .order(doubled: :desc)
+        .where(upper_name: "HELLO")
+        .order(doubled: :desc)
       expect(results.map(&:doubled)).to eq([10, 6])
     end
   end

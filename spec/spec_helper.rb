@@ -1,4 +1,4 @@
-if ENV['CI']
+if ENV["CI"]
   require "simplecov"
   require "simplecov-html"
   require "simplecov-json"
@@ -18,7 +18,7 @@ require "arel_attribute"
 require "database_cleaner/active_record"
 require "db-query-matchers"
 
-Dir['./spec/support/**/*.rb'].sort.each { |f| require f }
+Dir["./spec/support/**/*.rb"].sort.each { |f| require f }
 
 RSpec.configure do |config|
   # Enable flags like --only-failures and --next-failure
