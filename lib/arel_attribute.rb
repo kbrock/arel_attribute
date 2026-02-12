@@ -28,15 +28,27 @@ module ArelAttribute
 
     module InstanceMethods
       # Rails internals (associations, preloading) read FK/PK values via
-      # _read_attribute, not via the public method. For arel attributes that
-      # have a Ruby getter defined, fall back to calling that method so
-      # belongs_to/has_many with virtual FKs work.
+      # _read_attribute, not via the public method. For virtual-only arel
+      # attributes (not backed by a real column), fall back to calling the
+      # Ruby getter so belongs_to/has_many with virtual FKs work.
       def _read_attribute(attr_name, &block) # :nodoc:
-        value = super
-        if value.nil? && self.class.arel_attribute?(attr_name) && respond_to?(attr_name)
-          send(attr_name)
+        if self.class.arel_attribute?(attr_name) && !self.class.column_names.include?(attr_name.to_s)
+          written = @arel_attribute_values&.dig(attr_name.to_s)
+          return written unless written.nil?
+          return send(attr_name) if respond_to?(attr_name)
+        end
+        super
+      end
+
+      # Rails associations call _write_attribute to set FK values on
+      # child records. For virtual-only arel attributes, store the value
+      # in-memory so the getter and belongs_to can resolve the parent.
+      def _write_attribute(attr_name, value) # :nodoc:
+        if self.class.arel_attribute?(attr_name) && !self.class.column_names.include?(attr_name.to_s)
+          @arel_attribute_values ||= {}
+          @arel_attribute_values[attr_name.to_s] = value
         else
-          value
+          super
         end
       end
     end
@@ -90,9 +102,9 @@ module ArelAttribute
 
       # Register the type for an arel attribute so ActiveRecord can type-cast
       # values in WHERE clauses.
-      def register_arel_type(name, type)
+      def register_arel_type(name, type, **options)
         if type.is_a?(Symbol) || type.is_a?(String)
-          type = ActiveRecord::Type.lookup(type, adapter: ActiveRecord::Type.adapter_name_from(self))
+          type = ActiveRecord::Type.lookup(type, adapter: ActiveRecord::Type.adapter_name_from(self), **options)
         end
         attribute_types[name] = type
       end

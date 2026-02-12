@@ -20,6 +20,12 @@ RSpec.describe "Ancestry-style arel attributes" do
   end
 
   describe "Ruby getters" do
+    it "computes path_ids from path" do
+      expect(a.path_ids).to eq([])
+      expect(b.path_ids).to eq([a.id])
+      expect(c.path_ids).to eq([a.id, b.id])
+    end
+
     it "computes root_id from path" do
       expect(a.root_id).to eq(a.id)
       expect(b.root_id).to eq(a.id)
@@ -46,8 +52,12 @@ RSpec.describe "Ancestry-style arel attributes" do
     end
 
     it "filters by root_id with string value (type casting)" do
-      pending  "not working for sqlite yet" if Person.is_sqlite?
+      pending "punting: sqlite doesn't support 1 == '1'" if Person.is_sqlite?
       results = Person.where(root_id: a.id.to_s).order(:id)
+      # q_int = Person.where(root_id: a.id)
+      # q_str = Person.where(root_id: a.id.to_s)
+      # puts "INT SQL: #{q_int.to_sql}"
+      # puts "STR SQL: #{q_str.to_sql}"
       expect(results.map(&:id)).to eq([a.id, b.id, c.id])
     end
 
@@ -163,7 +173,21 @@ RSpec.describe "Ancestry-style arel attributes" do
 
       it "creates children via the association" do
         d = a.children.create!(name: "d")
+        expect(d.path).to eq(a.child_path)
+        expect(d.parent_id).to eq(a.id)
+        expect(d.parent).to eq(a)
         expect(a.children.order(:id).to_a).to eq([b, d])
+      end
+
+      it "builds children via the association" do
+        d = a.children.build(name: "d")
+        expect(d.parent_id).to eq(a.id)
+        expect(d.parent).to eq(a)
+      end
+
+      it "created child is findable by parent_id" do
+        d = a.children.create!(name: "d")
+        expect(Person.where(parent_id: a.id).order(:id).to_a).to eq([b, d])
       end
     end
 
