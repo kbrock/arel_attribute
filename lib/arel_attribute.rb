@@ -102,9 +102,9 @@ module ArelAttribute
 
       # Register the type for an arel attribute so ActiveRecord can type-cast
       # values in WHERE clauses.
-      def register_arel_type(name, type)
+      def register_arel_type(name, type, **options)
         if type.is_a?(Symbol) || type.is_a?(String)
-          type = ActiveRecord::Type.lookup(type, adapter: ActiveRecord::Type.adapter_name_from(self))
+          type = ActiveRecord::Type.lookup(type, adapter: ActiveRecord::Type.adapter_name_from(self), **options)
         end
         attribute_types[name] = type
       end

@@ -206,12 +206,106 @@ class SpecialAuthor < Author
   virtual_total :total_special_books_published, :published_special_books
 end
 
-class Person < ActiveRecord::Base
-  include ArelAttribute::Base
-  include ArelAttribute::VirtualTotal
-  include ArelAttribute::SqlDetection
+module ArelAncestry
+  def self.included(base)
+    base.include(ArelAttribute::SqlDetection)
+    base.extend(ClassMethods)
+    # include other schemes for making converting these keys
+    base.extend(MaterializedPath2)
+  end
 
-  class << self
+  module ClassMethods
+    # Define arel-backed virtual attributes for a materialized_path2 ancestry column.
+    #
+    # @param ancestry_column [Symbol] the column storing the path (e.g. :path)
+    # @param prefix [false, String, Symbol] prefix for attribute names (false = no prefix)
+    # @param attributes [true, false, Array<Symbol>] which attributes to define
+    #   true = all (:path_ids, :root_id, :parent_id, :child_path)
+    #   false = none
+    #   Array = only the listed attributes
+    # @param associations [true, false] whether to define parent/children/root associations
+    def arel_ancestry(ancestry_column, prefix: false, attributes: true, associations: true)
+      col = ancestry_column.to_sym
+      pk = primary_key.to_sym
+
+      attr_list = if attributes == true
+                    [:path_ids, :root_id, :parent_id, :child_path]
+                  elsif attributes == false
+                    []
+                  else
+                    Array(attributes).map(&:to_sym)
+                  end
+
+      if attr_list.include?(:path_ids)
+        # define_arel_attribute(:path_ids, :integer) do |t|
+        #   materialized_path2_root_id_arel(t, pk, col)
+        # end
+        # TODO: materialized_path2_path_ids_arel
+        # makes sense for postgres. may implement descendants. has_many with an array
+        define_method(:path_ids) do
+          self.class.materialized_path2_path_ids_ruby(send(col))
+        end
+      end
+
+      if attr_list.include?(:root_id)
+        define_arel_attribute(:root_id, :integer) do |t|
+          materialized_path2_root_id_arel(t, pk, col)
+        end
+
+        define_method(:root_id) do
+          self["root_id"] || self.class.calculate_materialized_path2_root_id_ruby(id, path_ids)
+        end
+      end
+
+      if attr_list.include?(:parent_id)
+        define_arel_attribute(:parent_id, :integer) do |t|
+          materialized_path2_parent_id_arel(t, pk, col)
+        end
+
+        # For unsaved records (e.g. children.build), the path isn't set yet
+        # so the ruby fallback returns nil. Check @arel_attribute_values
+        # (populated by parent_id=) to handle that case.
+        define_method(:parent_id) do
+          @arel_attribute_values&.dig("parent_id") || self["parent_id"] ||
+            self.class.materialized_path2_parent_id_ruby(id, path_ids)
+        end
+
+        # AR associations call parent_id= when building children via
+        # `a.children.create!`. _write_attribute stores the value so
+        # both the getter and _read_attribute (used by AR internals)
+        # can find it before the record is saved.
+        define_method(:parent_id=) do |value|
+          _write_attribute("parent_id", value)
+        end
+      end
+
+      if attr_list.include?(:child_path)
+        define_arel_attribute(:child_path, :string) do |t|
+          materialized_path2_child_path_arel(t, pk, col)
+        end
+
+        define_method(:child_path) do
+          self["child_path"] || self.class.materialized_path2_child_path_ruby(id, send(col))
+        end
+      end
+
+      if associations
+        if attr_list.include?(:root_id)
+          belongs_to :root, foreign_key: :root_id, class_name: name, optional: true
+        end
+        if attr_list.include?(:parent_id)
+          belongs_to :parent, foreign_key: :parent_id, class_name: name, inverse_of: :children, optional: true
+          has_many :children, foreign_key: :parent_id, class_name: name, inverse_of: :parent
+
+          before_validation :_set_path_from_parent, on: :create
+          define_method(:_set_path_from_parent) do
+            self[col] = parent.child_path if parent
+          end
+          private :_set_path_from_parent
+        end
+      end
+    end
+
     private
 
     def sql_fn(name, *args)
@@ -230,69 +324,71 @@ class Person < ActiveRecord::Base
       Arel::Nodes::Case.new(path).when(Arel.sql("'/'")).then(root_val).else(not_root)
     end
   end
+  module MaterializedPath2
+    def materialized_path2_root_id_arel(t, pk = :id, ancestry_column = :path)
+      path = t[ancestry_column]
+      stripped = sql_fn("SUBSTRING", path, 2)     # => 1/2/3/
+      s_pos = sql_fn(is_pg?("STRPOS", "INSTR"), stripped, Arel.sql("'/'")) - 1
+      segment = sql_fn("SUBSTR", path, 2, s_pos)    # => 1
+      sql_case_root(path, t[pk], sql_cast(segment, is_mysql?("UNSIGNED", "INTEGER")))
+    end
 
-  # root_id: first id in the path, e.g. "/1/2/3/" => 1
-  define_arel_attribute :root_id, :integer do |t|
-    path = t[:path]
-    stripped = sql_fn("SUBSTRING", path, 2)     # => 1/2/3/
-    s_pos = sql_fn(is_pg?("STRPOS", "INSTR"), stripped, Arel.sql("'/'")) - 1
-    segment = sql_fn("SUBSTR", path, 2, s_pos)    # => 1
-    sql_case_root(path, t[:id], sql_cast(segment, is_mysql?("UNSIGNED", "INTEGER")))
-  end
-
-  # parent_id: last id in the path, e.g. "/1/2/3/" => 3
-  define_arel_attribute :parent_id, :integer do |t|
-    path = t[:path]
-    slash = Arel.sql("'/'")
-    empty = Arel.sql("''")
-    last_segment =
-      if is_mysql?
-        # SUBSTRING_INDEX(SUBSTRING_INDEX(path, '/', -2), '/', 1) of /1/2/3/
-        parent_slash = sql_fn("SUBSTRING_INDEX", [path, slash, -2]) # => 3/
-        sql_fn("SUBSTRING_INDEX", [parent_slash, slash, 1, ])       # => 3
-      else
-        # RTRIM(REPLACE(path, RTRIM(RTRIM(path, '/'), REPLACE(path, '/', '')), ''), '/')
-        no_slash_chars = sql_fn("REPLACE", path, slash, empty)                # => 123
-        no_trailing_slash = sql_fn("RTRIM", path, slash)                      # => /1/2/3
-        front = sql_fn("RTRIM", no_trailing_slash, no_slash_chars)            # => /1/2/
-        sql_fn("RTRIM", sql_fn("REPLACE", path, front, empty), slash)         # => 3/ => 3
-      end
-    sql_case_root(path, Arel.sql("NULL"), sql_cast(last_segment, is_mysql?("UNSIGNED", "INTEGER")))
-  end
-
-  # child_path: path children would have, e.g. id=2, path="/1/" => "/1/2/"
-  define_arel_attribute :child_path, :string do |t|
-    Arel::Nodes::Concat.new(Arel::Nodes::Concat.new(t[:path], t[:id]), Arel.sql("'/'"))
-  end
-
-  def root_id
-    if has_attribute?("root_id")
-      self["root_id"]
-    else
-      # NOTE: this is a special case
-      ids = path_ids
+    def calculate_materialized_path2_root_id_ruby(id, ancestry_ids)
+      ids = ancestry_ids
       ids.empty? ? id : ids.first
     end
-  end
 
-  def parent_id
-    if has_attribute?("parent_id")
-      self["parent_id"]
-    else
-      # NOTE: this is different from root_id handling
-      ids = path_ids
+    def materialized_path2_parent_id_arel(t, pk = :id, ancestry_column = :path)
+      path = t[ancestry_column]
+      slash = Arel.sql("'/'")
+      empty = Arel.sql("''")
+      last_segment =
+        if is_mysql?
+          # SUBSTRING_INDEX(SUBSTRING_INDEX(path, '/', -2), '/', 1) of /1/2/3/
+          parent_slash = sql_fn("SUBSTRING_INDEX", [path, slash, -2]) # => 3/
+          sql_fn("SUBSTRING_INDEX", [parent_slash, slash, 1, ])       # => 3
+        else
+          # RTRIM(REPLACE(path, RTRIM(RTRIM(path, '/'), REPLACE(path, '/', '')), ''), '/')
+          no_slash_chars = sql_fn("REPLACE", path, slash, empty)                # => 123
+          no_trailing_slash = sql_fn("RTRIM", path, slash)                      # => /1/2/3
+          front = sql_fn("RTRIM", no_trailing_slash, no_slash_chars)            # => /1/2/
+          sql_fn("RTRIM", sql_fn("REPLACE", path, front, empty), slash)         # => 3/ => 3
+        end
+      sql_case_root(path, Arel.sql("NULL"), sql_cast(last_segment, is_mysql?("UNSIGNED", "INTEGER")))
+    end
+
+    def materialized_path2_parent_id_ruby(id, ancestry_ids)
+      ids = ancestry_ids
       ids.empty? ? nil : ids.last
     end
-  end
 
-  def child_path
-    has_attribute?("child_path") ? self["child_path"] : "#{path}#{id}/"
-  end
+    def materialized_path2_child_path_arel(t, pk = :id, ancestry_column = :path)
+      Arel::Nodes::Concat.new(Arel::Nodes::Concat.new(t[ancestry_column], t[pk]), Arel.sql("'/'"))
+    end
 
-  belongs_to :root, foreign_key: :root_id, class_name: "Person", optional: true
-  belongs_to :parent, foreign_key: :parent_id, class_name: "Person", inverse_of: :children, optional: true
-  has_many :children, foreign_key: :parent_id, class_name: "Person", inverse_of: :parent
-#  has_many :siblings, foreign_key: :parent_id, primary_key: :parent_id, class_name: "Person"
+    def materialized_path2_child_path_ruby(id, ancestry)
+      "#{ancestry}#{id}/"
+    end
+
+    # TODO: This is pg friendly (using an array) but probably not anything else
+    # def materialized_path2_path_ids_arel(t, pk = :id, ancestry_column = :path)
+    # end
+
+    def materialized_path2_path_ids_ruby(path)
+      return [] if path.blank? || path == "/"
+      path[1..].split("/").map(&:to_i)
+    end
+  end
+end
+
+class Person < ActiveRecord::Base
+  include ArelAttribute::Base
+  include ArelAttribute::VirtualTotal
+  include ArelAncestry
+
+  arel_ancestry :path, prefix: false, attributes: true, associations: true
+
+  # has_many :siblings, foreign_key: :parent_id, primary_key: :parent_id, class_name: "Person"
   has_many :siblings, foreign_key: :path, primary_key: :path, class_name: "Person"
 
   scope :roots, -> { where(path: "/") }
@@ -301,10 +397,5 @@ class Person < ActiveRecord::Base
     count.times.inject([]) do |ac, i|
       ac << create!(name: (start + i).chr, path: ac.last&.child_path || "/")
     end
-  end
-
-  def path_ids
-    return [] if path.blank? || path == "/"
-    path[1..].split("/").map(&:to_i)
   end
 end
