@@ -3,6 +3,11 @@ class TestRecord < ActiveRecord::Base
 
   include ArelAttribute::Base
   include ArelAttribute::VirtualTotal
+
+  # unfortunatly, this is not on associations
+  def self.factory(count, attrs)
+    Array(count) { create(attrs) }
+  end
 end
 
 class Author < TestRecord
@@ -171,16 +176,6 @@ class Book < TestRecord
   # def upper_author_name_def
   #   has_attribute?("upper_author_name_def") ? self["upper_author_name_def"] : upper_author_name || "other"
   # end
-
-  def self.create_with_bookmarks(count)
-    Author.create(:name => "foo").books.create!(:name => "book").tap { |book| book.create_bookmarks(count) }
-  end
-
-  def create_bookmarks(count, create_attrs = {})
-    Array.new(count) do
-      bookmarks.create({:name => "mark"}.merge(create_attrs))
-    end
-  end
 end
 
 class Bookmark < TestRecord

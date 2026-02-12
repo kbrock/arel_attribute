@@ -363,7 +363,10 @@ RSpec.describe ArelAttribute::VirtualTotal do
     def model_with_children(count)
       Author.create_with_books(count).tap do |author|
         author.books.each do |book|
-          book.create_bookmarks(2)
+          y = Array.new(2) do
+            # Bookmark.factory exists, but not bookmarks.factory
+            book.bookmarks.create(name: "mark")
+          end
         end
       end.reload
     end
