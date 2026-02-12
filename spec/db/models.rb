@@ -1,12 +1,11 @@
-class VirtualTotalTestBase < ActiveRecord::Base
+class TestRecord < ActiveRecord::Base
   self.abstract_class = true
-  self.belongs_to_required_by_default = false
 
   include ArelAttribute::Base
   include ArelAttribute::VirtualTotal
 end
 
-class Author < VirtualTotalTestBase
+class Author < TestRecord
   # basically a :parent_id relationship
   belongs_to :teacher, :foreign_key => :teacher_id, :class_name => "Author", :optional => true
   has_many :students, :foreign_key => :teacher_id, :class_name => "Author"
@@ -141,7 +140,7 @@ class Author < VirtualTotalTestBase
   end
 end
 
-class Book < VirtualTotalTestBase
+class Book < TestRecord
   has_many :bookmarks
   belongs_to :author
   has_and_belongs_to_many :co_authors, :class_name => "Author"
@@ -184,16 +183,36 @@ class Book < VirtualTotalTestBase
   end
 end
 
-class Bookmark < VirtualTotalTestBase
+class Bookmark < TestRecord
   belongs_to :book
 end
 
-class Photo < VirtualTotalTestBase
+class Photo < TestRecord
   belongs_to :imageable, :polymorphic => true
+end
+
+# these are just here so we don't monkey patch them in our tests
+class SpecialBook < Book
+  default_scope { where(:special => true) }
+
+  self.table_name = 'books'
+end
+
+class SpecialAuthor < Author
+  self.table_name = 'authors'
+
+  has_many :special_books,
+           :class_name => "SpecialBook", :foreign_key => "author_id"
+  has_many :published_special_books, -> { published },
+           :class_name => "SpecialBook", :foreign_key => "author_id"
+
+  virtual_total :total_special_books, :special_books
+  virtual_total :total_special_books_published, :published_special_books
 end
 
 class Person < ActiveRecord::Base
   include ArelAttribute::Base
+  include ArelAttribute::VirtualTotal
   include ArelAttribute::SqlDetection
 
   class << self
