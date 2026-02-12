@@ -45,7 +45,8 @@ RSpec.describe "Ancestry-style arel attributes" do
       expect(results.map(&:id)).to eq([a.id, b.id, c.id])
     end
 
-    it "filters by root_id with string value (type casting)", pending: "type casting not yet implemented for arel attributes" do
+    it "filters by root_id with string value (type casting)" do
+      pending  "not working for sqlite yet" if Person.is_sqlite?
       results = Person.where(root_id: a.id.to_s).order(:id)
       expect(results.map(&:id)).to eq([a.id, b.id, c.id])
     end
@@ -78,9 +79,13 @@ RSpec.describe "Ancestry-style arel attributes" do
 
   describe "ORDER with virtual attributes" do
     it "orders by parent_id with nulls (symbol)" do
-      # SQLite puts NULLs first by default
       results = Person.where(id: [a.id, b.id, c.id]).order(:parent_id, :id)
-      expect(results.map(&:id)).to eq([a.id, b.id, c.id])
+      if Person.is_pg?
+      # pg uses nulls_first standard
+        expect(results.map(&:id)).to eq([b.id, c.id, a.id])
+      else
+        expect(results.map(&:id)).to eq([a.id, b.id, c.id])
+      end
     end
 
     it "orders by parent_id with explicit arel and nulls_last" do
