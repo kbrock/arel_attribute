@@ -11,6 +11,8 @@ source /opt/homebrew/share/chruby/chruby.sh && chruby 4.0 && bundle exec rspec -
 source /opt/homebrew/share/chruby/chruby.sh && chruby 4.0 && bundle exec rspec spec/ancestry_spec.rb    # ancestry tests only
 ```
 
+**Current status: 148 passing, 1 pending (`subtree` — intentionally `xit`).**
+
 ## Database adapters
 
 Default is sqlite3. Set `DB` env var to switch:
@@ -34,3 +36,44 @@ Default is sqlite3. Set `DB` env var to switch:
 - `ArelAttribute::TableProxy` — wraps `Arel::Table` to resolve virtual attributes via arel blocks in WHERE/ORDER/SELECT
 - `ArelAttribute::ArelAggregate` — aggregate arel attributes (`arel_total`, `arel_sum`, etc.) using correlated subqueries
 - `Arel::Nodes::ArelAttribute` — custom arel node that expands arel blocks at SQL generation time
+- `ArelAttribute::MatchAssociation` — Rails monkey-patches structured as two separable patches (`Patch1`, `Patch2`) enabling arity-2 scope lambdas with a `match:` option on associations
+
+## Arity-2 association lambdas + match:
+
+The approach for LIKE-based associations (descendants, ancestors). A scope with arity 2 receives `(owner_or_table, foreign_table)`:
+
+- **Join context**: both args are arel tables — pure arel SQL
+- **Preload batch**: `owner_or_table` is an Array of owner records — JOIN to owners alias to filter to relevant records
+- **Single owner**: `owner_or_table` is a record — inline SQL WHERE
+
+The `match: ->(record, owner) { ... }` option provides ruby-side preloader bucketing, replacing the need for a synthetic FK column.
+
+Rails monkey-patches structured as two separable patches (each a potential Rails PR):
+
+**Patch1** (keyed on `scope.arity == 2`):
+1. `check_eager_loadable!` — allow arity-2 scopes for eager loading
+2. `join_scope` — call `super` (FK=PK), then merge arity-2 lambda on top
+
+**Patch2** (keyed on `options[:match]`):
+1. `join_scope` — call lambda directly, skip `super` (FK=PK suppressed)
+2. `AssociationScope#last_chain_scope` — skip FK=value WHERE
+3. `Preloader::Association#loader_query` — use `MatchLoaderQuery` (calls scope array branch)
+4. `Preloader::Association#load_records` — bucket by `match.call(record, owner)` instead of FK equality
+5. `Association#reset` — clear cached scope when owner changes
+6. `Builder::HasMany.valid_options` — allow `:match` option
+
+## What the ancestry_spec.rb proves
+
+`spec/ancestry_spec.rb` is the proof-of-concept test suite using a `Person` model with a `path` column (materialized_path2 format). It covers:
+
+- WHERE/ORDER/SELECT/DISTINCT on virtual attributes (`root_id`, `parent_id`, `child_path`)
+- `belongs_to :root` (virtual FK `root_id`)
+- `belongs_to :parent` (real FK `path`, virtual PK `child_path`)
+- `has_many :children` (virtual PK `child_path`)
+- `has_many :siblings`
+- `has_many :descendants` (LIKE-based arity-2 lambda + `match:`)
+- `has_many :ancestors` (reverse LIKE arity-2 lambda + `match:`)
+- Preload, includes (eager load), joins for all associations
+- `virtual_total` counting descendants
+- Create/build through association (sets `path` from parent)
+- **Pending**: `subtree` (self + descendants)

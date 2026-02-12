@@ -4,8 +4,16 @@
 require "bundler/setup"
 require "arel_attribute"
 
-# You can add fixtures and/or initialization code here to make experimenting
-# with your gem easier. You can also use a different console, if you like.
+# any helper that is not rspec specific
+Dir['./spec/support/**/*.rb'].sort.select { |f| !File.read(f).include?("RSpec") }.each { |f| require f }
+
+# models for local testing
+Database.new.migrate
+
+# data for local testing
+Author.create_with_books(3)
+Author.create_with_books(4)
+Author.create_with_books(2)
 
 require "irb"
 IRB.start(__FILE__)
