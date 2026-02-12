@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 IFS=$'\n\t'
-set -vx
+set -e
 
 bundle install
+echo
 
 # if you are having trouble with the privileges on this database:
 # DB=arel_attribute
@@ -12,5 +13,8 @@ bundle install
 # mysql -u root -e \n
 #   "CREATE MYUSER '$MUSER'@'localhost' IDENTIFIED BY '$PASSWORD'; GRANT ALL PRIVILEGES ON ${DB}.* TO '$MYUSER'@'localhost';"
 
+echo "Creating postgres database"
 DB=pg rake db:create
+echo
+echo "Creating mysql database"
 DB=mysql rake db:create
