@@ -46,7 +46,7 @@ RSpec.describe "Ancestry-style arel attributes" do
     end
 
     it "filters by root_id with string value (type casting)" do
-      pending  "not working for sqlite yet" if Person.is_sqlite?
+      pending "not working for sqlite yet" if Person.is_sqlite?
       results = Person.where(root_id: a.id.to_s).order(:id)
       expect(results.map(&:id)).to eq([a.id, b.id, c.id])
     end
@@ -163,6 +163,7 @@ RSpec.describe "Ancestry-style arel attributes" do
 
       it "creates children via the association" do
         d = a.children.create!(name: "d")
+        expect(d.path).to eq(a.child_path)
         expect(a.children.order(:id).to_a).to eq([b, d])
       end
     end

@@ -290,10 +290,9 @@ class Person < ActiveRecord::Base
   end
 
   belongs_to :root, foreign_key: :root_id, class_name: "Person", optional: true
-  belongs_to :parent, foreign_key: :path, primary_key: :child_path, class_name: "Person",
-                      inverse_of: :children, optional: true
-  has_many :children, foreign_key: :path, primary_key: :child_path, class_name: "Person",
-                      inverse_of: :parent
+  belongs_to :parent, foreign_key: :parent_id, class_name: "Person", inverse_of: :children, optional: true
+  has_many :children, foreign_key: :parent_id, class_name: "Person", inverse_of: :parent
+#  has_many :siblings, foreign_key: :parent_id, primary_key: :parent_id, class_name: "Person"
   has_many :siblings, foreign_key: :path, primary_key: :path, class_name: "Person"
 
   scope :roots, -> { where(path: "/") }
