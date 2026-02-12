@@ -216,70 +216,47 @@ RSpec.describe ArelAttribute::VirtualTotal do
     end
 
     context "with a special books class" do
-      before do
-        class SpecialBook < Book
-          default_scope { where(:special => true) }
-
-          self.table_name = 'books'
-        end
-
-        # Monkey patching Author for these specs
-        class Author < VirtualTotalTestBase
-          has_many :special_books,
-                   :class_name => "SpecialBook", :foreign_key => "author_id"
-          has_many :published_special_books, -> { published },
-                   :class_name => "SpecialBook", :foreign_key => "author_id"
-
-          virtual_total :total_special_books, :special_books
-          virtual_total :total_special_books_published, :published_special_books
-        end
-      end
-
-      after do
-        Object.send(:remove_const, :SpecialBook)
-      end
-
       context "with a has_many that includes a scope" do
         it "sorts by total" do
-          author2 = Author.create_with_books(2)
+          author2 = SpecialAuthor.create_with_books(2)
           author2.create_books(5, :special => true)
           author2.create_books(1, :special => true, :published => true)
-          author0 = Author.create
+          author0 = SpecialAuthor.create
           author0.create_books(2, :special => true)
           author0.create_books(2, :special => true, :published => true)
-          author1 = Author.create_with_books(1)
+          author1 = SpecialAuthor.create_with_books(1)
 
-            expect(Author.order(:total_special_books).pluck(:id))
+            expect(SpecialAuthor.order(:total_special_books).pluck(:id))
             .to eq([author1, author0, author2].map(&:id))
-          expect(Author.order(:total_special_books_published).pluck(:id))
+            expect(SpecialAuthor.order(:total_special_books_published).pluck(:id))
             .to eq([author1, author2, author0].map(&:id))
         end
 
         it "calculates totals locally" do
-          author0 = Author.create
+          author0 = SpecialAuthor.create
           author0.create_books(2, :special => true)
           author0.create_books(2, :special => true, :published => true)
-          author2 = Author.create_with_books(2)
+          author2 = SpecialAuthor.create_with_books(2)
           author2.create_books(5, :special => true)
           author2.create_books(1, :special => true, :published => true)
 
           expect do
-            expect(Author.find(author0.id).total_books).to eq(4)
-            expect(Author.find(author0.id).total_special_books).to eq(4)
-            expect(Author.find(author0.id).total_special_books_published).to eq(2)
-            expect(Author.find(author2.id).total_books).to eq(8)
-            expect(Author.find(author2.id).total_special_books).to eq(6)
-            expect(Author.find(author2.id).total_special_books_published).to eq(1)
+            expect(SpecialAuthor.find(author0.id).total_books).to eq(4)
+            expect(SpecialAuthor.find(author0.id).total_special_books).to eq(4)
+            expect(SpecialAuthor.find(author0.id).total_special_books_published).to eq(2)
+            expect(SpecialAuthor.find(author2.id).total_books).to eq(8)
+            expect(SpecialAuthor.find(author2.id).total_special_books).to eq(6)
+            expect(SpecialAuthor.find(author2.id).total_special_books_published).to eq(1)
           end.to make_database_queries(:count => 12)
         end
 
         it "can bring back totals in primary query" do
-          author3 = Author.create_with_books(3)
+          author3 = SpecialAuthor.create_with_books(3)
           author3.create_books(4, :published => true)
-          author1 = Author.create_with_books(1)
+          author1 = SpecialAuthor.create_with_books(1)
           author1.create_books(2, :special => true)
           author1.create_books(2, :special => true, :published => true)
-          author2 = Author.create_with_books(2)
+          author2 = SpecialAuthor.create_with_books(2)
           author2.create_books(5, :special => true)
           author2.create_books(1, :special => true, :published => true)
 
@@ -291,7 +268,7 @@ RSpec.describe ArelAttribute::VirtualTotal do
               total_special_books
               total_special_books_published
             ]
-            author_query = Author.select(*cols).to_a
+            author_query = SpecialAuthor.select(*cols).to_a
             expect(author_query).to match_array([author3, author1, author2])
             expect(author_query.map(&:total_books)).to match_array([7, 5, 8])
             expect(author_query.map(&:total_books_published)).to match_array([4, 2, 1])
@@ -304,13 +281,12 @@ RSpec.describe ArelAttribute::VirtualTotal do
   end
 
   describe ".virtual_total (with real has_many relation ems#total_vms)" do
-    let(:base_model) { Author }
     it "sorts by total" do
       author0 = model_with_children(0)
       author2 = model_with_children(2)
       author1 = model_with_children(1)
 
-      expect(base_model.order(:total_books).pluck(:id))
+      expect(Author.order(:total_books).pluck(:id))
         .to eq([author0, author1, author2].map(&:id))
     end
 
@@ -337,8 +313,6 @@ RSpec.describe ArelAttribute::VirtualTotal do
   end
 
   describe ".virtual_total (with has_many with scope Author#total_named_books)" do
-    let(:base_model) { Author }
-
     it "calculates totals locally" do
       expect(model_with_children(0).v_total_named_books).to eq(0)
       expect(model_with_children(2).v_total_named_books).to eq(2)
@@ -356,11 +330,11 @@ RSpec.describe ArelAttribute::VirtualTotal do
     # named_books is a real has_many with scope (not a virtual_has_many),
     # so it IS sql-backed — an improvement over the upstream virtual_has_many version
     it "is defined in sql" do
-      expect(base_model.attribute_supported_by_sql?(:total_named_books)).to be(true)
+      expect(Author.attribute_supported_by_sql?(:total_named_books)).to be(true)
     end
 
     it "alias is not defined in sql" do
-      expect(base_model.attribute_supported_by_sql?(:v_total_named_books)).to be(false)
+      expect(Author.attribute_supported_by_sql?(:v_total_named_books)).to be(false)
     end
 
     def model_with_children(count)
@@ -369,29 +343,30 @@ RSpec.describe ArelAttribute::VirtualTotal do
   end
 
   describe ".virtual_total (with through relation (ems#total_storages)" do
-    let(:base_model) { Author }
-
     it "calculates totals locally" do
       expect(model_with_children(0).total_bookmarks).to eq(0)
       expect(model_with_children(2).total_bookmarks).to eq(4)
     end
 
     it "calculates totals in primary query" do
-      expect(base_model.attribute_supported_by_sql?(:total_bookmarks)).to be(true)
+      expect(Author.attribute_supported_by_sql?(:total_bookmarks)).to be(true)
 
       model_with_children(1) # 2 =  1 book  @ 2 bookmarks each
       model_with_children(0) # 0
       model_with_children(3) # 6 =  3 books @ 2 bookmarks each
 
       expect do
-        expect(base_model.select(:id, :total_bookmarks).order(:total_bookmarks => :desc).map(&:total_bookmarks)).to eq([6, 2, 0])
+        expect(Author.select(:id, :total_bookmarks).order(:total_bookmarks => :desc).map(&:total_bookmarks)).to eq([6, 2, 0])
       end.to make_database_queries(:count => 1)
     end
 
     def model_with_children(count)
-      base_model.create_with_books(count).tap do |author|
+      Author.create_with_books(count).tap do |author|
         author.books.each do |book|
-          book.create_bookmarks(2)
+          y = Array.new(2) do
+            # Bookmark.factory exists, but not bookmarks.factory
+            book.bookmarks.create(name: "mark")
+          end
         end
       end.reload
     end
@@ -399,8 +374,6 @@ RSpec.describe ArelAttribute::VirtualTotal do
 
   describe ".virtual_total (with real has_many relation and .order() in scope)" do
     context "with no hardware" do
-      let(:base_model) { Author }
-
       it "calculates totals locally" do
         expect(model_with_children(0).total_ordered_books).to eq(0)
         expect(model_with_children(2).total_ordered_books).to eq(2)
@@ -409,7 +382,7 @@ RSpec.describe ArelAttribute::VirtualTotal do
       it "uses calculated (inline) attribute" do
         auth1 = model_with_children(0)
         auth2 = model_with_children(2)
-        query = base_model.select(:id, :total_ordered_books).load
+        query = Author.select(:id, :total_ordered_books).load
         expect do
           expect(query).to match_array([auth1, auth2])
           expect(query.map(&:total_ordered_books)).to match_array([0, 2])

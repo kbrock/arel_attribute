@@ -1,12 +1,16 @@
-class VirtualTotalTestBase < ActiveRecord::Base
+class TestRecord < ActiveRecord::Base
   self.abstract_class = true
-  self.belongs_to_required_by_default = false
 
   include ArelAttribute::Base
   include ArelAttribute::VirtualTotal
+
+  # unfortunatly, this is not on associations
+  def self.factory(count, attrs)
+    Array(count) { create(attrs) }
+  end
 end
 
-class Author < VirtualTotalTestBase
+class Author < TestRecord
   # basically a :parent_id relationship
   belongs_to :teacher, :foreign_key => :teacher_id, :class_name => "Author", :optional => true
   has_many :students, :foreign_key => :teacher_id, :class_name => "Author"
@@ -81,6 +85,7 @@ class Author < VirtualTotalTestBase
   define_arel_attribute(:upper_name, :string) { |t| Arel::Nodes::NamedFunction.new("UPPER", [t[:name]]) }
 
   # a (local) virtual_attribute without a uses, but with arel
+  # added in grouping (didn't use for other)
   virtual_attribute :nick_or_name, :string, :arel => (lambda do |t|
     t.grouping(Arel::Nodes::NamedFunction.new("COALESCE", [t[:nickname], t[:name]]))
   end)
@@ -141,7 +146,7 @@ class Author < VirtualTotalTestBase
   end
 end
 
-class Book < VirtualTotalTestBase
+class Book < TestRecord
   has_many :bookmarks
   belongs_to :author
   has_and_belongs_to_many :co_authors, :class_name => "Author"
@@ -172,28 +177,38 @@ class Book < VirtualTotalTestBase
   # def upper_author_name_def
   #   has_attribute?("upper_author_name_def") ? self["upper_author_name_def"] : upper_author_name || "other"
   # end
-
-  def self.create_with_bookmarks(count)
-    Author.create(:name => "foo").books.create!(:name => "book").tap { |book| book.create_bookmarks(count) }
-  end
-
-  def create_bookmarks(count, create_attrs = {})
-    Array.new(count) do
-      bookmarks.create({:name => "mark"}.merge(create_attrs))
-    end
-  end
 end
 
-class Bookmark < VirtualTotalTestBase
+class Bookmark < TestRecord
   belongs_to :book
 end
 
-class Photo < VirtualTotalTestBase
+class Photo < TestRecord
   belongs_to :imageable, :polymorphic => true
+end
+
+# these are just here so we don't monkey patch them in our tests
+class SpecialBook < Book
+  default_scope { where(:special => true) }
+
+  self.table_name = 'books'
+end
+
+class SpecialAuthor < Author
+  self.table_name = 'authors'
+
+  has_many :special_books,
+           :class_name => "SpecialBook", :foreign_key => "author_id"
+  has_many :published_special_books, -> { published },
+           :class_name => "SpecialBook", :foreign_key => "author_id"
+
+  virtual_total :total_special_books, :special_books
+  virtual_total :total_special_books_published, :published_special_books
 end
 
 class Person < ActiveRecord::Base
   include ArelAttribute::Base
+  include ArelAttribute::VirtualTotal
   include ArelAttribute::SqlDetection
 
   class << self
@@ -204,11 +219,11 @@ class Person < ActiveRecord::Base
     end
 
     def sql_cast(expr, type)
-      Arel::Nodes::NamedFunction.new("CAST", [Arel.sql("#{expr.to_sql} AS #{type}")])
+      Arel::Nodes::NamedFunction.new("CAST", [Arel::Nodes::As.new(expr, Arel::Nodes::SqlLiteral.new(type))])
     end
 
     def sql_position(str, sub)
-      is_pg? ? sql_fn("STRPOS", str, sub) : sql_fn("INSTR", str, sub)
+      sql_fn(is_pg?("STRPOS", "INSTR"), str, sub)
     end
 
     def sql_case_root(path, root_val, not_root)
@@ -219,10 +234,10 @@ class Person < ActiveRecord::Base
   # root_id: first id in the path, e.g. "/1/2/3/" => 1
   define_arel_attribute :root_id, :integer do |t|
     path = t[:path]
-    stripped = sql_fn("LTRIM", path, Arel.sql("'/'"))
-    len = sql_position(stripped, Arel.sql("'/'")) - 1
-    segment = sql_fn("SUBSTR", path, 2, len)
-    sql_case_root(path, t[:id], sql_cast(segment, "INTEGER"))
+    stripped = sql_fn("SUBSTRING", path, 2)     # => 1/2/3/
+    s_pos = sql_fn(is_pg?("STRPOS", "INSTR"), stripped, Arel.sql("'/'")) - 1
+    segment = sql_fn("SUBSTR", path, 2, s_pos)    # => 1
+    sql_case_root(path, t[:id], sql_cast(segment, is_mysql?("UNSIGNED", "INTEGER")))
   end
 
   # parent_id: last id in the path, e.g. "/1/2/3/" => 3
@@ -230,18 +245,24 @@ class Person < ActiveRecord::Base
     path = t[:path]
     slash = Arel.sql("'/'")
     empty = Arel.sql("''")
-    non_slash_chars = sql_fn("REPLACE", path, slash, empty)
-    front = sql_fn("RTRIM", sql_fn("RTRIM", path, slash), non_slash_chars)
-    last_segment = sql_fn("RTRIM", sql_fn("REPLACE", path, front, empty), slash)
-    sql_case_root(path, Arel.sql("NULL"), sql_cast(last_segment, "INTEGER"))
+    last_segment =
+      if is_mysql?
+        # SUBSTRING_INDEX(SUBSTRING_INDEX(path, '/', -2), '/', 1) of /1/2/3/
+        parent_slash = sql_fn("SUBSTRING_INDEX", [path, slash, -2]) # => 3/
+        sql_fn("SUBSTRING_INDEX", [parent_slash, slash, 1, ])       # => 3
+      else
+        # RTRIM(REPLACE(path, RTRIM(RTRIM(path, '/'), REPLACE(path, '/', '')), ''), '/')
+        no_slash_chars = sql_fn("REPLACE", path, slash, empty)                # => 123
+        no_trailing_slash = sql_fn("RTRIM", path, slash)                      # => /1/2/3
+        front = sql_fn("RTRIM", no_trailing_slash, no_slash_chars)            # => /1/2/
+        sql_fn("RTRIM", sql_fn("REPLACE", path, front, empty), slash)         # => 3/ => 3
+      end
+    sql_case_root(path, Arel.sql("NULL"), sql_cast(last_segment, is_mysql?("UNSIGNED", "INTEGER")))
   end
 
   # child_path: path children would have, e.g. id=2, path="/1/" => "/1/2/"
   define_arel_attribute :child_path, :string do |t|
-    Arel::Nodes::Concat.new(
-      Arel::Nodes::Concat.new(t[:path], t[:id]),
-      Arel.sql("'/'")
-    )
+    Arel::Nodes::Concat.new(Arel::Nodes::Concat.new(t[:path], t[:id]), Arel.sql("'/'"))
   end
 
   def root_id
@@ -282,8 +303,6 @@ class Person < ActiveRecord::Base
       ac << create!(name: (start + i).chr, path: ac.last&.child_path || "/")
     end
   end
-
-  private
 
   def path_ids
     return [] if path.blank? || path == "/"
