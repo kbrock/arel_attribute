@@ -11,6 +11,7 @@ require "arel_attribute/relation_extension"
 require "arel_attribute/arel_aggregate"
 require "arel_attribute/arel_delegate"
 require "arel_attribute/sql_detection"
+require "arel_attribute/match_association"
 
 module ArelAttribute
   class Error < StandardError; end
@@ -24,9 +25,19 @@ module ArelAttribute
       base.class_attribute :arel_aliases, instance_accessor: false, default: {}
       # name => type (symbol like :integer, or an ActiveModel::Type instance)
       base.class_attribute :arel_attribute_types, instance_accessor: false, default: {}
+
+      # Reset cached arel_table and predicate_builder so they use
+      # the TableProxy that resolves virtual arel attributes in WHERE clauses.
+      base.instance_variable_set(:@arel_table, nil)
+      base.instance_variable_set(:@predicate_builder, nil)
     end
 
     module InstanceMethods
+      def reload(*)
+        @arel_attribute_values = nil
+        super
+      end
+
       # Rails internals (associations, preloading) read FK/PK values via
       # _read_attribute, not via the public method. For virtual-only arel
       # attributes (not backed by a real column), fall back to calling the
@@ -52,6 +63,20 @@ module ArelAttribute
         if self.class.arel_attribute?(attr_name) && !self.class.column_names.include?(attr_name.to_s)
           @arel_attribute_values ||= {}
           @arel_attribute_values[attr_name.to_s] = value
+        else
+          super
+        end
+      end
+
+      # belongs_to replace_keys calls owner[fk]= which routes through
+      # write_attribute (not _write_attribute). Intercept virtual arel
+      # attributes here too so the value is stored in-memory.
+      def write_attribute(attr_name, value)
+        name = attr_name.to_s
+        name = self.class.attribute_aliases[name] || name
+        if self.class.arel_attribute?(name) && !self.class.column_names.include?(name)
+          @arel_attribute_values ||= {}
+          @arel_attribute_values[name] = value
         else
           super
         end

@@ -25,6 +25,24 @@ class Author < TestRecord
   has_one :fancy_photo, -> { where(:purpose => "fancy") }, :as => :imageable, :class_name => "Photo"
   has_one :first_book, -> { order(:id) }, :class_name => "Book"
 
+  arel_attribute(:current_photo_id, :integer) do |t|
+    photos_table = Photo.arel_table
+    photos_table
+      .where(photos_table[:imageable_type].eq("Author"))
+      .where(photos_table[:imageable_id].eq(t[:id]))
+      .order(photos_table[:id].desc)
+      .take(1)
+      .project(photos_table[:id])
+  end
+
+  def current_photo_id
+    if has_attribute?("current_photo_id")
+      self["current_photo_id"]
+    else
+      photos.order(:id => :desc).limit(1).pick(:id)
+    end
+  end
+
   arel_total :total_books, :books
   arel_total :total_books_published, :published_books
   arel_total :total_books_in_progress, :wip_books
@@ -201,8 +219,6 @@ module ArelAncestry
         # arel_attribute(:path_ids, :integer) do |t|
         #   materialized_path2_root_id_arel(t, pk, col)
         # end
-        # TODO: materialized_path2_path_ids_arel
-        # makes sense for postgres. may implement descendants. has_many with an array
         define_method(:path_ids) do
           self.class.materialized_path2_path_ids_ruby(send(col))
         end
@@ -248,6 +264,17 @@ module ArelAncestry
         define_method(:child_path) do
           self["child_path"] || self.class.materialized_path2_child_path_ruby(id, send(col))
         end
+
+        # local ruby helper only. not sure if these are needed
+        # should they be using :child_path instead of pk, col?
+
+        self.singleton_class.define_method(:child_path_wild_arel) do |t|
+          materialized_path2_child_path_wild_arel(t, pk, col)
+        end
+
+        define_method(:child_path_wild_ruby) do
+          self.class.materialized_path2_child_path_wild_ruby(id, send(col))
+        end
       end
 
       if associations
@@ -265,6 +292,58 @@ module ArelAncestry
           private :_set_path_from_parent
         end
       end
+
+      # TODO: siblings does not include self
+      # has_many :siblings, foreign_key: :parent_id, primary_key: :parent_id, class_name: "Person"
+      has_many :siblings, foreign_key: ancestry_column, primary_key: ancestry_column, class_name: "Person"
+
+      # descendants: target.path LIKE owner.child_path || '%'
+      descendants_strategy = Module.new do
+        define_method(:join_arel) do |owner_table, foreign_table|
+          where(foreign_table[col].matches(child_path_wild_arel(owner_table)))
+        end
+        define_method(:join_records) do |owners, foreign_table|
+          owners_alias = arel_table.alias("owners_for_preload")
+          on_clause = foreign_table[col].matches(child_path_wild_arel(owners_alias))
+          joins(foreign_table.join(owners_alias).on(on_clause).join_sources)
+            .where(owners_alias[primary_key].in(owners.map(&:id)))
+        end
+        define_method(:where_record) do |owner, foreign_table|
+          where(foreign_table[col].matches(owner.child_path_wild_ruby))
+        end
+        define_method(:match?) do |record, owner|
+          record.path.start_with?(owner.child_path)
+        end
+      end
+
+      has_many :descendants, class_name: "Person", join_strategy: descendants_strategy
+      arel_total :total_descendants, :descendants
+
+      # ancestors: owner.path LIKE target.child_path || '%'
+      ancestors_strategy = Module.new do
+        define_method(:join_arel) do |owner_table, foreign_table|
+          where(owner_table[col].matches(child_path_wild_arel(foreign_table)))
+        end
+        define_method(:join_records) do |owners, foreign_table|
+          owners_alias = arel_table.alias("owners_for_preload")
+          on_clause = owners_alias[col].matches(child_path_wild_arel(foreign_table))
+          joins(foreign_table.join(owners_alias).on(on_clause).join_sources)
+            .where(owners_alias[primary_key].in(owners.map(&:id)))
+        end
+        define_method(:where_record) do |owner, foreign_table|
+          owner_col = Arel::Nodes::Quoted.new(owner.send(col))
+          where(owner_col.matches(child_path_wild_arel(foreign_table)))
+        end
+        define_method(:match?) do |record, owner|
+          owner.path.start_with?(record.child_path)
+        end
+      end
+
+      has_many :ancestors, class_name: "Person", join_strategy: ancestors_strategy
+
+      # TODO: subtree = self + descendants
+      has_many :subtree, ->(person) { where(arel_table[ancestry_column].matches("#{person.child_path_wild_ruby}").or(arel_table[:id].eq(person.id))) },
+               class_name: "Person", foreign_key: :path, primary_key: :child_path
     end
 
     private
@@ -274,7 +353,7 @@ module ArelAncestry
     end
 
     def sql_cast(expr, type)
-      Arel::Nodes::NamedFunction.new("CAST", [Arel::Nodes::As.new(expr, Arel::Nodes::SqlLiteral.new(type))])
+      Arel::Nodes::NamedFunction.new("CAST", [Arel::Nodes::As.new(expr, Arel.sql(type))])
     end
 
     def sql_position(str, sub)
@@ -324,14 +403,21 @@ module ArelAncestry
     end
 
     def materialized_path2_child_path_arel(t, pk = :id, ancestry_column = :path)
-      Arel::Nodes::Concat.new(Arel::Nodes::Concat.new(t[ancestry_column], t[pk]), Arel.sql("'/'"))
+      Arel::Nodes::Concat.new(t[ancestry_column], t[pk]).concat(Arel.sql("'/'"))
     end
 
     def materialized_path2_child_path_ruby(id, ancestry)
       "#{ancestry}#{id}/"
     end
 
-    # TODO: This is pg friendly (using an array) but probably not anything else
+    def materialized_path2_child_path_wild_arel(t, pk = :id, ancestry_column = :path) # optimization to take path?
+      Arel::Nodes::Concat.new(t[ancestry_column], t[pk]).concat(Arel.sql("'/%'"))
+    end
+
+    def materialized_path2_child_path_wild_ruby(id, ancestry) #optimization to take path?
+      "#{ancestry}#{id}/%"
+    end
+
     # def materialized_path2_path_ids_arel(t, pk = :id, ancestry_column = :path)
     # end
 
@@ -348,11 +434,9 @@ class Person < ActiveRecord::Base
   include ArelAncestry
 
   arel_ancestry :path, prefix: false, attributes: true, associations: true
-
-  # has_many :siblings, foreign_key: :parent_id, primary_key: :parent_id, class_name: "Person"
-  has_many :siblings, foreign_key: :path, primary_key: :path, class_name: "Person"
-
   scope :roots, -> { where(path: "/") }
+
+  arel_total :total_descendants, :descendants
 
   def self.factory(count = 3, start: "a".ord)
     count.times.inject([]) do |ac, i|

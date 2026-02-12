@@ -238,4 +238,154 @@ RSpec.describe "Ancestry-style arel attributes" do
       expect(results.map(&:id)).to eq([a.id, b.id])
     end
   end
+
+  describe "descendants (LIKE-based has_many)" do
+    # descendants: all records whose path starts with our child_path
+    # a (path="/") -> child_path="/1/" -> descendants: b (path="/1/"), c (path="/1/2/")
+    # b (path="/1/") -> child_path="/1/2/" -> descendants: c (path="/1/2/")
+    # c (path="/1/2/") -> child_path="/1/2/3/" -> descendants: none
+
+    it "loads descendants" do
+      expect(a.descendants.order(:id).to_a).to eq([b, c])
+      expect(b.descendants.order(:id).to_a).to eq([c])
+      expect(c.descendants.order(:id).to_a).to be_empty
+    end
+
+    it "loads descendants with deeper trees" do
+      d = Person.create!(name: "d", path: c.child_path)
+      expect(a.descendants.order(:id).to_a).to eq([b, c, d])
+      expect(b.descendants.order(:id).to_a).to eq([c, d])
+      expect(c.descendants.order(:id).to_a).to eq([d])
+    end
+
+    it "does not include self in descendants" do
+      expect(a.descendants).not_to include(a)
+    end
+  end
+
+  describe "ancestors (reverse LIKE has_many)" do
+    # ancestors: records whose child_path is a prefix of our path
+    # a (path="/") -> no ancestors (path_ids=[])
+    # b (path="/1/") -> ancestors: a (a.child_path="/1/" is prefix of "/1/")
+    # c (path="/1/2/") -> ancestors: a, b
+
+    it "loads ancestors" do
+      expect(a.ancestors.order(:id).to_a).to be_empty
+      expect(b.ancestors.order(:id).to_a).to eq([a])
+      expect(c.ancestors.order(:id).to_a).to eq([a, b])
+    end
+
+    it "loads ancestors with deeper trees" do
+      d = Person.create!(name: "d", path: c.child_path)
+      expect(d.ancestors.order(:id).to_a).to eq([a, b, c])
+    end
+
+    it "does not include self in ancestors" do
+      expect(c.ancestors).not_to include(c)
+    end
+  end
+
+  describe "subtree (self + descendants)", pending: "depends on descendants fix" do
+    xit "includes self and all descendants" do
+      expect(a.subtree.order(:id).to_a).to eq([a, b, c])
+      expect(b.subtree.order(:id).to_a).to eq([b, c])
+      expect(c.subtree.order(:id).to_a).to eq([c])
+    end
+  end
+
+  describe "preloading descendants/ancestors" do
+    it "preloads descendants for single owner" do
+      results = Person.where(id: [a.id]).preload(:descendants).order(:id).load
+      expect(results[0].descendants.map(&:id)).to match_array([b.id, c.id])
+    end
+
+    it "preloads descendants for multiple owners (same depth)" do
+      d = a.children.create!(name: "d")
+      results = Person.where(id: [b.id, d.id]).preload(:descendants).order(:id).load
+      expect(results[0].descendants.map(&:id)).to match_array([c.id])
+      expect(results[1].descendants.map(&:id)).to be_empty
+    end
+
+    it "preloads descendants for multiple owners (mixed depth)" do
+      results = Person.where(id: [a.id, b.id, c.id]).preload(:descendants).order(:id).load
+      expect(results[0].descendants.map(&:id)).to match_array([b.id, c.id])
+      expect(results[1].descendants.map(&:id)).to match_array([c.id])
+      expect(results[2].descendants.map(&:id)).to be_empty
+    end
+
+    it "preloads descendants with deeper trees" do
+      d = Person.create!(name: "d", path: c.child_path)
+      results = Person.where(id: [a.id, b.id]).preload(:descendants).order(:id).load
+      expect(results[0].descendants.map(&:id)).to match_array([b.id, c.id, d.id])
+      expect(results[1].descendants.map(&:id)).to match_array([c.id, d.id])
+    end
+
+    it "preloads descendants where leaf has no descendants" do
+      results = Person.where(id: [c.id]).preload(:descendants).load
+      expect(results[0].descendants.map(&:id)).to be_empty
+    end
+
+    it "preloads ancestors" do
+      results = Person.where(id: [a.id, b.id, c.id]).preload(:ancestors).order(:id).load
+      expect(results[0].ancestors.map(&:id)).to be_empty
+      expect(results[1].ancestors.map(&:id)).to eq([a.id])
+      expect(results[2].ancestors.map(&:id)).to match_array([a.id, b.id])
+    end
+  end
+
+  describe "eager loading descendants/ancestors" do
+    it "includes descendants" do
+      results = Person.where(id: [a.id, b.id, c.id]).includes(:descendants).order(:id).load
+      expect(results[0].descendants.map(&:id)).to match_array([b.id, c.id])
+      expect(results[1].descendants.map(&:id)).to match_array([c.id])
+      expect(results[2].descendants.map(&:id)).to be_empty
+    end
+
+    it "includes descendants for single owner" do
+      results = Person.where(id: [a.id]).includes(:descendants).load
+      expect(results[0].descendants.map(&:id)).to match_array([b.id, c.id])
+    end
+
+    it "includes ancestors" do
+      results = Person.where(id: [a.id, b.id, c.id]).includes(:ancestors).order(:id).load
+      expect(results[0].ancestors.map(&:id)).to be_empty
+      expect(results[1].ancestors.map(&:id)).to eq([a.id])
+      expect(results[2].ancestors.map(&:id)).to match_array([a.id, b.id])
+    end
+  end
+
+  describe "joins with descendants/ancestors" do
+    it "joins descendants and filters" do
+      c.update!(name: "leaf")
+      results = Person.joins(:descendants).where(descendants: { name: "leaf" }).distinct.order(:id)
+      expect(results.map(&:id)).to eq([a.id, b.id])
+    end
+
+    it "joins ancestors and filters" do
+      a.update!(name: "top")
+      results = Person.joins(:ancestors).where(ancestors: { name: "top" }).distinct.order(:id)
+      expect(results.map(&:id)).to eq([b.id, c.id])
+    end
+  end
+
+  describe "virtual_total with descendants" do
+    it "counts descendants via virtual_total" do
+      results = Person.select(:id, :total_descendants).order(:id).load
+      expect(results.map(&:total_descendants)).to eq([2, 1, 0])
+    end
+  end
+
+  describe "create through association" do
+    it "creates child with correct path" do
+      d = a.children.create!(name: "d")
+      expect(d.path).to eq(a.child_path)
+      expect(d.parent).to eq(a)
+    end
+
+    it "created child appears in descendants of grandparent" do
+      d = b.children.create!(name: "d")
+      expect(d.path).to eq(b.child_path)
+      expect(a.descendants.order(:id).to_a).to include(d)
+    end
+  end
 end
