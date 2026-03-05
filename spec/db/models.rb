@@ -193,6 +193,63 @@ module ArelAncestry
     base.extend(MaterializedPath2)
   end
 
+  # Strategy for descendants: target.path LIKE owner.child_path || '%'
+  DescendantsStrategy = Struct.new(:col, :pk) do
+    def join_arel(scope, owner_table, foreign_table)
+      scope.where(foreign_table[col].matches(child_path_wild_arel(owner_table)))
+    end
+
+    def join_records(scope, owners, foreign_table)
+      owners_alias = scope.klass.arel_table.alias("owners_for_preload")
+      on_clause = foreign_table[col].matches(child_path_wild_arel(owners_alias))
+      scope.joins(foreign_table.join(owners_alias).on(on_clause).join_sources)
+           .where(owners_alias[pk].in(owners.map(&:id)))
+    end
+
+    def where_record(scope, owner, foreign_table)
+      scope.where(foreign_table[col].matches(owner.child_path_wild_ruby))
+    end
+
+    def match?(record, owner)
+      record.send(col).start_with?(owner.child_path)
+    end
+
+    private
+
+    def child_path_wild_arel(t)
+      Arel::Nodes::Concat.new(t[col], t[pk]).concat(Arel.sql("'/%'"))
+    end
+  end
+
+  # Strategy for ancestors: owner.path LIKE target.child_path || '%'
+  AncestorsStrategy = Struct.new(:col, :pk) do
+    def join_arel(scope, owner_table, foreign_table)
+      scope.where(owner_table[col].matches(child_path_wild_arel(foreign_table)))
+    end
+
+    def join_records(scope, owners, foreign_table)
+      owners_alias = scope.klass.arel_table.alias("owners_for_preload")
+      on_clause = owners_alias[col].matches(child_path_wild_arel(foreign_table))
+      scope.joins(foreign_table.join(owners_alias).on(on_clause).join_sources)
+           .where(owners_alias[pk].in(owners.map(&:id)))
+    end
+
+    def where_record(scope, owner, foreign_table)
+      owner_col = Arel::Nodes::Quoted.new(owner.send(col))
+      scope.where(owner_col.matches(child_path_wild_arel(foreign_table)))
+    end
+
+    def match?(record, owner)
+      owner.send(col).start_with?(record.child_path)
+    end
+
+    private
+
+    def child_path_wild_arel(t)
+      Arel::Nodes::Concat.new(t[col], t[pk]).concat(Arel.sql("'/%'"))
+    end
+  end
+
   module ClassMethods
     # Define arel-backed virtual attributes for a materialized_path2 ancestry column.
     #
@@ -265,13 +322,6 @@ module ArelAncestry
           self["child_path"] || self.class.materialized_path2_child_path_ruby(id, send(col))
         end
 
-        # local ruby helper only. not sure if these are needed
-        # should they be using :child_path instead of pk, col?
-
-        self.singleton_class.define_method(:child_path_wild_arel) do |t|
-          materialized_path2_child_path_wild_arel(t, pk, col)
-        end
-
         define_method(:child_path_wild_ruby) do
           self.class.materialized_path2_child_path_wild_ruby(id, send(col))
         end
@@ -316,30 +366,10 @@ module ArelAncestry
         end
       end
 
-      has_many :descendants, class_name: "Person", join_strategy: descendants_strategy
+      has_many :descendants, class_name: "Person", join_strategy: ArelAncestry::DescendantsStrategy.new(col, pk)
       arel_total :total_descendants, :descendants
 
-      # ancestors: owner.path LIKE target.child_path || '%'
-      ancestors_strategy = Module.new do
-        define_method(:join_arel) do |owner_table, foreign_table|
-          where(owner_table[col].matches(child_path_wild_arel(foreign_table)))
-        end
-        define_method(:join_records) do |owners, foreign_table|
-          owners_alias = arel_table.alias("owners_for_preload")
-          on_clause = owners_alias[col].matches(child_path_wild_arel(foreign_table))
-          joins(foreign_table.join(owners_alias).on(on_clause).join_sources)
-            .where(owners_alias[primary_key].in(owners.map(&:id)))
-        end
-        define_method(:where_record) do |owner, foreign_table|
-          owner_col = Arel::Nodes::Quoted.new(owner.send(col))
-          where(owner_col.matches(child_path_wild_arel(foreign_table)))
-        end
-        define_method(:match?) do |record, owner|
-          owner.path.start_with?(record.child_path)
-        end
-      end
-
-      has_many :ancestors, class_name: "Person", join_strategy: ancestors_strategy
+      has_many :ancestors, class_name: "Person", join_strategy: ArelAncestry::AncestorsStrategy.new(col, pk)
 
       # TODO: subtree = self + descendants
       has_many :subtree, ->(person) { where(arel_table[ancestry_column].matches("#{person.child_path_wild_ruby}").or(arel_table[:id].eq(person.id))) },

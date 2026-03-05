@@ -4,27 +4,19 @@ module ArelAttribute
   # Extends ActiveRecord associations to support a join_strategy: option
   # for custom join conditions (e.g. LIKE-based ancestry queries).
   #
-  # join_strategy: accepts a Module implementing 4 methods:
-  #   join_arel(owner_table, foreign_table)  — JOIN context (both arel tables)
-  #   where_record(owner, foreign_table)     — single record WHERE
-  #   join_records(owners, foreign_table)    — preload batch
-  #   match?(record, owner)                  — Ruby-side preload bucketing
+  # join_strategy: accepts any object (duck-typed) implementing 4 methods:
+  #   join_arel(scope, owner_table, foreign_table)  — JOIN context (both arel tables)
+  #   where_record(scope, owner, foreign_table)      — single record WHERE
+  #   join_records(scope, owners, foreign_table)     — preload batch
+  #   match?(record, owner)                          — Ruby-side preload bucketing
   #
-  # Methods are called via instance_exec on the relation (self = relation),
-  # except match? which is called as a plain method.
-  # Use define_method closures to capture outer-scope locals.
+  # scope is passed explicitly as the first argument; no instance_exec magic needed.
   #
   # NOTE: When debugging, always write tests rather than ad-hoc ruby -e scripts.
   # The test environment sets up models correctly; standalone scripts often fail.
   module MatchAssociation
     def self.resolve_join_strategy(reflection)
-      strategy = reflection.options[:join_strategy]
-      case strategy
-      when Module then strategy
-      when Symbol then Object.const_get(strategy.to_s)
-      when String then Object.const_get(strategy)
-      else raise ArgumentError, "join_strategy: must be a Module, Symbol, or String"
-      end
+      reflection.options[:join_strategy]
     end
 
     module ReflectionExtension
@@ -66,11 +58,9 @@ module ArelAttribute
 
         klass_scope.where!(type => foreign_klass.polymorphic_name) if type
 
-        # CHANGED: call strategy#join_arel via instance_exec; strategy owns join condition
+        # CHANGED: call strategy#join_arel directly; strategy owns join condition
         # foreign_table = owner's table; table = target's table (klass's arel_table alias)
-        klass_scope = klass_scope.extend(strategy).instance_exec(foreign_table, table) do |ft, t|
-          join_arel(ft, t)
-        end || klass_scope
+        klass_scope = strategy.join_arel(klass_scope, foreign_table, table)
         # /CHANGED
 
         klass_scope.where!(klass.send(:type_condition, table)) if klass.finder_needs_type_condition?
@@ -92,9 +82,7 @@ module ArelAttribute
         if refl&.options&.[](:join_strategy)
           strategy = ArelAttribute::MatchAssociation.resolve_join_strategy(refl)
           foreign_table = reflection.aliased_table
-          return scope.extend(strategy).instance_exec(owner, foreign_table) do |o, ft|
-            where_record(o, ft)
-          end || scope
+          return strategy.where_record(scope, owner, foreign_table)
         end
         # /CHANGED
 
@@ -147,10 +135,7 @@ module ArelAttribute
 
         base_scope = @scope.klass.scope_for_association
         strategy = ArelAttribute::MatchAssociation.resolve_join_strategy(@reflection)
-        relation = base_scope.extend(strategy).instance_exec(owners_for_query, base_scope.klass.arel_table) do |owners, ft|
-          join_records(owners, ft)
-        end || base_scope
-        relation.load(&block)
+        strategy.join_records(base_scope, owners_for_query, base_scope.klass.arel_table).load(&block)
       end
       # /CHANGED
     end
@@ -173,9 +158,6 @@ module ArelAttribute
         return super unless reflection.options[:join_strategy]
 
         strategy = ArelAttribute::MatchAssociation.resolve_join_strategy(reflection)
-        # match? is an instance method defined via define_method; bind to a plain object
-        match_method = strategy.instance_method(:match?)
-        match = ->(record, owner) { match_method.bind_call(Object.new, record, owner) }
         @records_by_owner = {}.compare_by_identity
         raw_records ||= loader_query.records_for([self])
         # SQL array branch returns one row per (record, owner) match; dedup by id
@@ -186,7 +168,7 @@ module ArelAttribute
 
           # CHANGED: replace owners_by_key[derive_key(record, association_key_name)]
           # original: owners_by_key[derive_key(record, association_key_name)]&.each do |owner|
-          send(:owners).select { |owner| match.call(record, owner) }.each do |owner|
+          send(:owners).select { |owner| strategy.match?(record, owner) }.each do |owner|
             # /CHANGED
             entries = (@records_by_owner[owner] ||= [])
 
