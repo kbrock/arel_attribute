@@ -81,10 +81,24 @@ module ArelAttribute
         column_names.include?(name.to_s) || arel_attribute?(name)
       end
 
-      def load_schema!
-        super
-        arel_attribute_types.each do |name, type|
-          register_arel_type(name, type)
+      # Override: ActiveModel::AttributeRegistration::ClassMethods#type_for_attribute
+      # Source: activemodel 8.1.2 lib/active_model/attribute_registration.rb:43
+      #
+      # Returns the correct type for virtual arel attributes. This is used by
+      # the preloader to type-cast FK values in WHERE clauses
+      # (e.g. WHERE parent_id IN (1, 2) needs integer binding).
+      #
+      # We cannot use _default_attributes or attribute_types for this because:
+      # - _default_attributes makes Rails expect the column in DB result sets
+      #   (causes MissingAttributeError on load)
+      # - attribute_types mutations are lost when @attribute_types is reset
+      #   (e.g. reload_schema_from_cache calls reset_default_attributes!)
+      def type_for_attribute(attr_name, &block)
+        name = attr_name.to_s
+        if arel_attribute_types.key?(name)
+          resolved_arel_attribute_types[name]
+        else
+          super
         end
       end
 
@@ -94,13 +108,16 @@ module ArelAttribute
 
       private
 
-      # Register the type for an arel attribute so ActiveRecord can type-cast
-      # values in WHERE clauses.
-      def register_arel_type(name, type, **options)
-        if type.is_a?(Symbol) || type.is_a?(String)
-          type = ActiveRecord::Type.lookup(type, adapter: ActiveRecord::Type.adapter_name_from(self), **options)
+      # Lazily resolve symbolic type names (e.g. :integer) to actual type objects.
+      # Cached per class; reset if arel_attribute_types changes (class_attribute handles this).
+      def resolved_arel_attribute_types
+        @resolved_arel_attribute_types ||= arel_attribute_types.transform_values do |type|
+          if type.is_a?(Symbol) || type.is_a?(String)
+            ActiveRecord::Type.lookup(type, adapter: ActiveRecord::Type.adapter_name_from(self))
+          else
+            type
+          end
         end
-        attribute_types[name] = type
       end
     end
   end
