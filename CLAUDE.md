@@ -30,7 +30,7 @@ Default is sqlite3. Set `DB` env var to switch:
 
 ## Architecture
 
-- `ArelAttribute::Base` — included into ActiveRecord models, provides `define_arel_attribute` and `virtual_attribute`
+- `ArelAttribute::Base` — included into ActiveRecord models, provides `arel_attribute`
 - `ArelAttribute::TableProxy` — wraps `Arel::Table` to resolve virtual attributes via arel blocks in WHERE/ORDER/SELECT
 - `ArelAttribute::VirtualTotal` — aggregate virtual attributes (`virtual_total`, `virtual_sum`, etc.) using correlated subqueries
 - `Arel::Nodes::ArelAttribute` — custom arel node that expands arel blocks at SQL generation time

@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 RSpec.describe ArelAttribute do
-  describe ".define_arel_attribute" do
+  describe ".arel_attribute" do
     it "registers the attribute" do
       expect(Author.arel_attribute?(:doubled)).to be true
       expect(Author.arel_attribute?(:upper_name)).to be true
@@ -12,21 +12,16 @@ RSpec.describe ArelAttribute do
     end
 
     it "lists virtual attribute names" do
-      expect(Author.virtual_attribute_names).to include("doubled", "upper_name")
+      expect(Author.arel_attribute_names).to include("doubled", "upper_name")
     end
 
     it "requires a block" do
       expect {
-        Author.define_arel_attribute(:bad, :integer)
+        Author.arel_attribute(:bad, :integer)
       }.to raise_error(ArgumentError, /arel block is required/)
     end
   end
 
-  describe ".virtual_attribute (compatibility)" do
-    it "registers via the arel option" do
-      expect(Author.arel_attribute?(:nick_or_name)).to be true
-    end
-  end
 
   describe "arel_table (TableProxy)" do
     it "returns an ArelAttribute node for virtual attributes" do

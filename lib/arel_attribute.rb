@@ -59,23 +59,17 @@ module ArelAttribute
       # The block receives the arel table and returns an arel node.
       # This allows the attribute to be used in WHERE, ORDER BY, and SELECT clauses.
       #
-      #   define_arel_attribute :parent_id, :integer do |t|
+      #   arel_attribute :parent_id, :integer do |t|
       #     Arel::Nodes::NamedFunction.new('SUBSTR', [t[:path], ...])
       #   end
       #
-      def define_arel_attribute(name, type, &block)
-        raise ArgumentError, "arel block is required for define_arel_attribute" unless block
+      def arel_attribute(name, type, &block)
+        raise ArgumentError, "arel block is required for arel_attribute" unless block
         self.arel_aliases = arel_aliases.merge(name.to_s => block)
         self.arel_attribute_types = arel_attribute_types.merge(name.to_s => type)
       end
 
-      # Compatibility with virtual_attributes API
-      def virtual_attribute(name, type, options = {})
-        raise ArgumentError, "arel option is required" unless options[:arel]
-        define_arel_attribute(name, type, &options[:arel])
-      end
-
-      def virtual_attribute_names
+      def arel_attribute_names
         arel_aliases.keys
       end
 

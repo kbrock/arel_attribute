@@ -18,7 +18,7 @@ module ArelAttribute
       #      vms.count
       #    end
       #
-      #    virtual_attribute :total_vms, :integer, :arel => ...
+      #    arel_attribute :total_vms, :integer, &arel
       #
       #   # arel == (SELECT COUNT(*) FROM vms where ems.id = vms.ems_id)
       #
@@ -58,9 +58,8 @@ module ArelAttribute
           arel = virtual_aggregate_arel(reflection, method_name, column)
         end
 
-        if arel
-          virtual_attribute(name, :integer, :arel => arel)
-        end
+        raise ArgumentError, "#{self.name}.virtual_total #{name.inspect} could not generate arel for #{relation.inspect}" unless arel
+        arel_attribute(name, :integer, &arel)
       end
 
       def define_virtual_aggregate_method(name, relation, column, ruby_method_name, arel_method_name = ruby_method_name)

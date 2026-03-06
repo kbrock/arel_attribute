@@ -4,7 +4,7 @@ require "arel"
 
 module ArelAttribute
   # TableProxy intercepts arel_table[:name] lookups to return arel expressions
-  # for attributes registered via define_arel_attribute.
+  # for attributes registered via arel_attribute.
   #
   # For real columns, it falls through to the standard Arel::Table behavior.
   class TableProxy < Arel::Table
