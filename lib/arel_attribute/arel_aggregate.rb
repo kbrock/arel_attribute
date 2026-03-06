@@ -1,5 +1,5 @@
 module ArelAttribute
-  module VirtualTotal
+  module ArelAggregate
     extend ActiveSupport::Concern
 
     module ClassMethods
@@ -9,7 +9,7 @@ module ArelAttribute
       #
       #    class ExtManagementSystem
       #      has_many :vms
-      #      virtual_total :total_vms, :vms
+      #      arel_total :total_vms, :vms
       #    end
       #
       #    generates:
@@ -22,32 +22,32 @@ module ArelAttribute
       #
       #   # arel == (SELECT COUNT(*) FROM vms where ems.id = vms.ems_id)
       #
-      def virtual_total(name, relation, options = {})
-        define_virtual_aggregate_attribute(name, relation, :count, Arel.star, options)
+      def arel_total(name, relation, options = {})
+        define_arel_aggregate_attribute(name, relation, :count, Arel.star, options)
         define_method(name) { (has_attribute?(name) ? self[name] : send(relation).try(:size)) || 0 }
       end
 
-      def virtual_sum(name, relation, column, options = {})
-        define_virtual_aggregate_attribute(name, relation, :sum, column, options)
-        define_virtual_aggregate_method(name, relation, column, :sum)
+      def arel_sum(name, relation, column, options = {})
+        define_arel_aggregate_attribute(name, relation, :sum, column, options)
+        define_arel_aggregate_method(name, relation, column, :sum)
       end
 
-      def virtual_minimum(name, relation, column, options = {})
-        define_virtual_aggregate_attribute(name, relation, :minimum, column, options)
-        define_virtual_aggregate_method(name, relation, column, :min, :minimum)
+      def arel_minimum(name, relation, column, options = {})
+        define_arel_aggregate_attribute(name, relation, :minimum, column, options)
+        define_arel_aggregate_method(name, relation, column, :min, :minimum)
       end
 
-      def virtual_maximum(name, relation, column, options = {})
-        define_virtual_aggregate_attribute(name, relation, :maximum, column, options)
-        define_virtual_aggregate_method(name, relation, column, :max, :maximum)
+      def arel_maximum(name, relation, column, options = {})
+        define_arel_aggregate_attribute(name, relation, :maximum, column, options)
+        define_arel_aggregate_method(name, relation, column, :max, :maximum)
       end
 
-      def virtual_average(name, relation, column, options = {})
-        define_virtual_aggregate_attribute(name, relation, :average, column, options)
-        define_virtual_aggregate_method(name, relation, column, :average) { |values| (values.count == 0) ? 0 : values.sum / values.count }
+      def arel_average(name, relation, column, options = {})
+        define_arel_aggregate_attribute(name, relation, :average, column, options)
+        define_arel_aggregate_method(name, relation, column, :average) { |values| (values.count == 0) ? 0 : values.sum / values.count }
       end
 
-      def define_virtual_aggregate_attribute(name, relation, method_name, column, options)
+      def define_arel_aggregate_attribute(name, relation, method_name, column, options)
         reflection = reflect_on_association(relation)
 
         if options.key?(:arel)
@@ -55,14 +55,14 @@ module ArelAttribute
           # if there is no relation to get to the arel, have to throw it away
           arel = nil if !arel || !reflection
         else
-          arel = virtual_aggregate_arel(reflection, method_name, column)
+          arel = arel_aggregate_arel(reflection, method_name, column)
         end
 
-        raise ArgumentError, "#{self.name}.virtual_total #{name.inspect} could not generate arel for #{relation.inspect}" unless arel
+        raise ArgumentError, "#{self.name}.arel_total #{name.inspect} could not generate arel for #{relation.inspect}" unless arel
         arel_attribute(name, :integer, &arel)
       end
 
-      def define_virtual_aggregate_method(name, relation, column, ruby_method_name, arel_method_name = ruby_method_name)
+      def define_arel_aggregate_method(name, relation, column, ruby_method_name, arel_method_name = ruby_method_name)
         define_method(name) do
           if has_attribute?(name)
             self[name] || 0
@@ -82,7 +82,7 @@ module ArelAttribute
       # Want to embed the count into sql.
       # in a perfect world, a count would have returned arel not a static value.
       # instead, we take the count(*) still in sql, and convert it to something we can use
-      def virtual_aggregate_arel(reflection, method_name, column)
+      def arel_aggregate_arel(reflection, method_name, column)
         return unless reflection && [:has_many, :has_and_belongs_to_many].include?(reflection.macro)
 
         # need db access for the reflection join_keys, so delaying all this key lookup until call time

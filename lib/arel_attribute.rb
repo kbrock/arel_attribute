@@ -8,7 +8,7 @@ require "arel/nodes/arel_attribute"
 require "arel_attribute/version"
 require "arel_attribute/table_proxy"
 require "arel_attribute/relation_extension"
-require "arel_attribute/virtual_total"
+require "arel_attribute/arel_aggregate"
 require "arel_attribute/sql_detection"
 
 module ArelAttribute
@@ -18,8 +18,7 @@ module ArelAttribute
     def self.included(base)
       base.extend ClassMethods
       base.include InstanceMethods
-      # double check backwards compatibility
-      # base.include ArelAttribute::VirtualTotal
+      # base.include ArelAttribute::ArelAggregate
       # name => arel_block (lambda that takes an arel table, returns an arel node)
       base.class_attribute :arel_aliases, instance_accessor: false, default: {}
       # name => type (symbol like :integer, or an ActiveModel::Type instance)
@@ -35,7 +34,12 @@ module ArelAttribute
         if self.class.arel_attribute?(attr_name) && !self.class.column_names.include?(attr_name.to_s)
           written = @arel_attribute_values&.dig(attr_name.to_s)
           return written unless written.nil?
-          return send(attr_name) if respond_to?(attr_name)
+          # Only call the ruby getter if the method is explicitly defined
+          # (not an AR-generated attribute method, which would recurse back here).
+          if self.class.method_defined?(attr_name, false) ||
+             self.class.private_method_defined?(attr_name, false)
+            return send(attr_name)
+          end
         end
         super
       end

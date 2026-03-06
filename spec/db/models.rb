@@ -2,7 +2,7 @@ class TestRecord < ActiveRecord::Base
   self.abstract_class = true
 
   include ArelAttribute::Base
-  include ArelAttribute::VirtualTotal
+  include ArelAttribute::ArelAggregate
 
   # unfortunatly, this is not on associations
   def self.factory(count, attrs)
@@ -25,25 +25,25 @@ class Author < TestRecord
   has_one :fancy_photo, -> { where(:purpose => "fancy") }, :as => :imageable, :class_name => "Photo"
   has_one :first_book, -> { order(:id) }, :class_name => "Book"
 
-  virtual_total :total_books, :books
-  virtual_total :total_books_published, :published_books
-  virtual_total :total_books_in_progress, :wip_books
+  arel_total :total_books, :books
+  arel_total :total_books_published, :published_books
+  arel_total :total_books_in_progress, :wip_books
   # same as total_books, but going through a relation with order
-  virtual_total :total_ordered_books, :ordered_books
+  arel_total :total_ordered_books, :ordered_books
   # virtual total using has_many :through
-  virtual_total :total_bookmarks, :bookmarks
+  arel_total :total_bookmarks, :bookmarks
   alias v_total_bookmarks total_bookmarks
   # virtual total using has_and_belongs_to_many
-  virtual_total :total_co_books, :co_books
+  arel_total :total_co_books, :co_books
 
   has_many :recently_published_books, -> { published.order(:created_on => :desc) },
            :class_name => "Book", :foreign_key => "author_id"
 
-  virtual_total :total_recently_published_books, :recently_published_books
-  virtual_average :average_recently_published_books_rating, :recently_published_books, :rating
-  virtual_minimum :minimum_recently_published_books_rating, :recently_published_books, :rating
-  virtual_maximum :maximum_recently_published_books_rating, :recently_published_books, :rating
-  virtual_sum :sum_recently_published_books_rating, :recently_published_books, :rating
+  arel_total :total_recently_published_books, :recently_published_books
+  arel_average :average_recently_published_books_rating, :recently_published_books, :rating
+  arel_minimum :minimum_recently_published_books_rating, :recently_published_books, :rating
+  arel_maximum :maximum_recently_published_books_rating, :recently_published_books, :rating
+  arel_sum :sum_recently_published_books_rating, :recently_published_books, :rating
   # virtual_delegate :description, :to => :current_photo, :prefix => true, :type => :string
   # virtual_delegate :description, :to => :fancy_photo, :prefix => true, :type => :string
   # # delegate to parent relationship
@@ -51,7 +51,7 @@ class Author < TestRecord
   # virtual_delegate :teacher_name, :to => :teacher, :prefix => true, :type => :string
 
   # PROBLEM: punted on this use case (ruby has many)
-  # # This is here to provide a virtual_total of a virtual_has_many that depends upon an array of associations.
+  # # This is here to provide a arel_total of a virtual_has_many that depends upon an array of associations.
   # # NOTE: this is tailored to the use case and is not an optimal solution
   # def named_books
   #   # I didn't have the creativity needed to find a good ruby only check here
@@ -68,7 +68,7 @@ class Author < TestRecord
   has_many :named_books, -> { where.not(:name => nil) }, :class_name => "Book"
   # books_with_authors depends on virtual_delegate :author_name in Book
   # has_many :books_with_authors, -> { where.not(:author_name => nil).not(:name => nil) }, :class_name => "Book"
-  virtual_total :total_named_books, :named_books
+  arel_total :total_named_books, :named_books
   alias v_total_named_books total_named_books
 
   def nick_or_name
@@ -200,8 +200,8 @@ class SpecialAuthor < Author
   has_many :published_special_books, -> { published },
            :class_name => "SpecialBook", :foreign_key => "author_id"
 
-  virtual_total :total_special_books, :special_books
-  virtual_total :total_special_books_published, :published_special_books
+  arel_total :total_special_books, :special_books
+  arel_total :total_special_books_published, :published_special_books
 end
 
 module ArelAncestry
@@ -381,7 +381,7 @@ end
 
 class Person < ActiveRecord::Base
   include ArelAttribute::Base
-  include ArelAttribute::VirtualTotal
+  include ArelAttribute::ArelAggregate
   include ArelAncestry
 
   arel_ancestry :path, prefix: false, attributes: true, associations: true
