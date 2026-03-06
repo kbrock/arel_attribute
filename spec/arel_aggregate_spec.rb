@@ -1,6 +1,6 @@
-RSpec.describe ArelAttribute::VirtualTotal do
+RSpec.describe ArelAttribute::ArelAggregate do
   describe ".select" do
-    it "supports virtual_totals" do
+    it "supports arel_totals" do
       Author.select(:id, :total_books).first
     end
 
@@ -14,17 +14,17 @@ RSpec.describe ArelAttribute::VirtualTotal do
   end
 
   describe ".where" do
-    it "supports virtual_totals hash syntax" do
+    it "supports arel_totals hash syntax" do
       Author.where(:total_books => 5).first
     end
 
-    it "supports virtual_totals arel syntax" do
+    it "supports arel_totals arel syntax" do
       Author.where(Author.arel_table[:total_books].gt(5)).first
     end
   end
 
   describe ".order" do
-    it "supports virtual_totals" do
+    it "supports arel_totals" do
       Author.order(:total_books).first
     end
   end
@@ -48,7 +48,7 @@ RSpec.describe ArelAttribute::VirtualTotal do
     end
   end
 
-  describe ".virtual_total" do
+  describe ".arel_total" do
     context "with a standard has_many" do
       it "sorts by total attribute" do
         author2 = Author.create_with_books(2)
@@ -280,7 +280,7 @@ RSpec.describe ArelAttribute::VirtualTotal do
     end
   end
 
-  describe ".virtual_total (with real has_many relation ems#total_vms)" do
+  describe ".arel_total (with real has_many relation ems#total_vms)" do
     it "sorts by total" do
       author0 = model_with_children(0)
       author2 = model_with_children(2)
@@ -312,7 +312,7 @@ RSpec.describe ArelAttribute::VirtualTotal do
     end
   end
 
-  describe ".virtual_total (with has_many with scope Author#total_named_books)" do
+  describe ".arel_total (with has_many with scope Author#total_named_books)" do
     it "calculates totals locally" do
       expect(model_with_children(0).v_total_named_books).to eq(0)
       expect(model_with_children(2).v_total_named_books).to eq(2)
@@ -342,7 +342,7 @@ RSpec.describe ArelAttribute::VirtualTotal do
     end
   end
 
-  describe ".virtual_total (with through relation (ems#total_storages)" do
+  describe ".arel_total (with through relation (ems#total_storages)" do
     it "calculates totals locally" do
       expect(model_with_children(0).total_bookmarks).to eq(0)
       expect(model_with_children(2).total_bookmarks).to eq(4)
@@ -372,7 +372,7 @@ RSpec.describe ArelAttribute::VirtualTotal do
     end
   end
 
-  describe ".virtual_total (with real has_many relation and .order() in scope)" do
+  describe ".arel_total (with real has_many relation and .order() in scope)" do
     context "with no hardware" do
       it "calculates totals locally" do
         expect(model_with_children(0).total_ordered_books).to eq(0)
@@ -395,7 +395,7 @@ RSpec.describe ArelAttribute::VirtualTotal do
     end
   end
 
-  describe ".virtual_aggregation" do
+  describe ".arel_aggregation" do
     context "with a standard has_many" do
       let(:authors) { [author, author2, author3, author4] }
       let(:author) do
