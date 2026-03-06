@@ -2,7 +2,7 @@
 
 module ArelAttribute
   # Extends ActiveRecord::Relation to resolve arel attributes
-  # registered via define_arel_attribute.
+  # registered via arel_attribute.
   #
   # Without this, order(:virtual_col) and select(:virtual_col) would treat
   # the symbol as a raw column name instead of routing through TableProxy.

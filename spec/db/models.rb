@@ -81,20 +81,18 @@ class Author < TestRecord
   end
 
   # simple arel attributes for testing basic functionality
-  define_arel_attribute(:doubled, :integer) { |t| t[:teacher_id] + t[:teacher_id] }
-  define_arel_attribute(:upper_name, :string) { |t| Arel::Nodes::NamedFunction.new("UPPER", [t[:name]]) }
+  arel_attribute(:doubled, :integer) { |t| t[:teacher_id] + t[:teacher_id] }
+  arel_attribute(:upper_name, :string) { |t| Arel::Nodes::NamedFunction.new("UPPER", [t[:name]]) }
 
-  # a (local) virtual_attribute without a uses, but with arel
-  # added in grouping (didn't use for other)
-  virtual_attribute :nick_or_name, :string, :arel => (lambda do |t|
+  # arel attribute with grouping wrapping
+  arel_attribute(:nick_or_name, :string) do |t|
     t.grouping(Arel::Nodes::NamedFunction.new("COALESCE", [t[:nickname], t[:name]]))
-  end)
+  end
 
-  # We did not support arel returning something other than Grouping.
-  # this is here to test what happens when we do
-  virtual_attribute :name_no_group, :string, :arel => (lambda do |t|
+  # arel attribute without grouping — tests that non-Grouping arel nodes work
+  arel_attribute(:name_no_group, :string) do |t|
     Arel::Nodes::NamedFunction.new("COALESCE", [t[:nickname], t[:name]])
-  end)
+  end
 
   # def first_book_name
   #   has_attribute?("first_book_name") ? self["first_book_name"] : books.first.name
@@ -237,7 +235,7 @@ module ArelAncestry
                   end
 
       if attr_list.include?(:path_ids)
-        # define_arel_attribute(:path_ids, :integer) do |t|
+        # arel_attribute(:path_ids, :integer) do |t|
         #   materialized_path2_root_id_arel(t, pk, col)
         # end
         # TODO: materialized_path2_path_ids_arel
@@ -248,7 +246,7 @@ module ArelAncestry
       end
 
       if attr_list.include?(:root_id)
-        define_arel_attribute(:root_id, :integer) do |t|
+        arel_attribute(:root_id, :integer) do |t|
           materialized_path2_root_id_arel(t, pk, col)
         end
 
@@ -258,7 +256,7 @@ module ArelAncestry
       end
 
       if attr_list.include?(:parent_id)
-        define_arel_attribute(:parent_id, :integer) do |t|
+        arel_attribute(:parent_id, :integer) do |t|
           materialized_path2_parent_id_arel(t, pk, col)
         end
 
@@ -280,7 +278,7 @@ module ArelAncestry
       end
 
       if attr_list.include?(:child_path)
-        define_arel_attribute(:child_path, :string) do |t|
+        arel_attribute(:child_path, :string) do |t|
           materialized_path2_child_path_arel(t, pk, col)
         end
 
