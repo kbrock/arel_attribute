@@ -52,7 +52,6 @@ RSpec.describe "Ancestry-style arel attributes" do
     end
 
     it "filters by root_id with string value (type casting)" do
-      pending "punting: sqlite doesn't support 1 == '1'" if Person.is_sqlite?
       results = Person.where(root_id: a.id.to_s).order(:id)
       # q_int = Person.where(root_id: a.id)
       # q_str = Person.where(root_id: a.id.to_s)

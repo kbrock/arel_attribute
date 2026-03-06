@@ -28,6 +28,12 @@ RSpec.configure do |config|
   config.disable_monkey_patching!
   config.expose_dsl_globally = false
 
+  # Reproduce a specific order:
+  #   bundle exec rspec --seed 12345
+  #   bundle exec rake spec SPEC_OPTS="--seed 12345"
+  config.order = :random
+  Kernel.srand config.seed
+
   config.expect_with :rspec do |c|
     c.syntax = :expect
   end
