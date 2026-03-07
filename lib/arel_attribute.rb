@@ -9,6 +9,7 @@ require "arel_attribute/version"
 require "arel_attribute/table_proxy"
 require "arel_attribute/relation_extension"
 require "arel_attribute/arel_aggregate"
+require "arel_attribute/arel_delegate"
 require "arel_attribute/sql_detection"
 
 module ArelAttribute
@@ -67,7 +68,22 @@ module ArelAttribute
       #     Arel::Nodes::NamedFunction.new('SUBSTR', [t[:path], ...])
       #   end
       #
-      def arel_attribute(name, type, &block)
+      # With through:/source:, delegates to an association's column and auto-generates
+      # the arel as a correlated subquery (works with belongs_to and has_one):
+      #
+      #   arel_attribute :teacher_name, :string, through: :teacher, source: :name
+      #
+      def arel_attribute(name, type, through: nil, source: name, default: nil, &block)
+        if through
+          define_arel_delegate_method(name, source, through, default)
+
+          unless (to_ref = reflect_on_association(through))
+            raise ArgumentError, "#{self.name}.arel_attribute #{name.inspect} references unknown :through association #{through.inspect}"
+          end
+
+          block ||= ArelAttribute::ArelDelegate.virtual_delegate_arel(self, source, to_ref)
+        end
+
         raise ArgumentError, "arel block is required for arel_attribute" unless block
         self.arel_aliases = arel_aliases.merge(name.to_s => block)
         self.arel_attribute_types = arel_attribute_types.merge(name.to_s => type)
@@ -111,6 +127,18 @@ module ArelAttribute
       end
 
       private
+
+      # Define a Ruby getter that delegates to the association, with DB-loaded value support.
+      def define_arel_delegate_method(name, source, through, default)
+        define_method(name) do
+          if has_attribute?(name.to_s)
+            self[name.to_s] || default
+          else
+            target = send(through)
+            target.nil? ? default : target.send(source)
+          end
+        end
+      end
 
       # Lazily resolve symbolic type names (e.g. :integer) to actual type objects.
       # Cached per class; reset if arel_attribute_types changes (class_attribute handles this).

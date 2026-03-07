@@ -44,30 +44,18 @@ class Author < TestRecord
   arel_minimum :minimum_recently_published_books_rating, :recently_published_books, :rating
   arel_maximum :maximum_recently_published_books_rating, :recently_published_books, :rating
   arel_sum :sum_recently_published_books_rating, :recently_published_books, :rating
-  # virtual_delegate :description, :to => :current_photo, :prefix => true, :type => :string
-  # virtual_delegate :description, :to => :fancy_photo, :prefix => true, :type => :string
-  # # delegate to parent relationship
-  # virtual_delegate :name, :to => :teacher, :prefix => true, :type => :string
-  # virtual_delegate :teacher_name, :to => :teacher, :prefix => true, :type => :string
-
-  # PROBLEM: punted on this use case (ruby has many)
-  # # This is here to provide a arel_total of a virtual_has_many that depends upon an array of associations.
-  # # NOTE: this is tailored to the use case and is not an optimal solution
-  # def named_books
-  #   # I didn't have the creativity needed to find a good ruby only check here
-  #   books.select(&:name)
-  # end
-
-  # PROBLEM: punted on this use case (ruby only has many)
-  # virtual_has_many that depends upon a hash of a virtual column in another model.
-  # NOTE: this is tailored to the use case and is not an optimal solution
-  # def books_with_authors
-  #   books.select { |b| b.name && b.author_name }
-  # end
+  # delegate to parent (self-join)
+  arel_attribute :teacher_name, :string, through: :teacher, source: :name
+  # delegate to parent's parent (chained self-join)
+  arel_attribute :teacher_teacher_name, :string, through: :teacher, source: :teacher_name
+  # delegate to has_one (polymorphic)
+  arel_attribute :current_photo_description, :string, through: :current_photo, source: :description
+  # delegate to has_one with scope
+  arel_attribute :fancy_photo_description, :string, through: :fancy_photo, source: :description
 
   has_many :named_books, -> { where.not(:name => nil) }, :class_name => "Book"
-  # books_with_authors depends on virtual_delegate :author_name in Book
-  # has_many :books_with_authors, -> { where.not(:author_name => nil).not(:name => nil) }, :class_name => "Book"
+  # depends on Book#author_name delegate being filterable in SQL
+  has_many :books_with_authors, -> { where.not(:author_name => nil).where.not(:name => nil) }, :class_name => "Book"
   arel_total :total_named_books, :named_books
   alias v_total_named_books total_named_books
 
@@ -94,44 +82,20 @@ class Author < TestRecord
     Arel::Nodes::NamedFunction.new("COALESCE", [t[:nickname], t[:name]])
   end
 
-  # def first_book_name
-  #   has_attribute?("first_book_name") ? self["first_book_name"] : books.first.name
-  # end
-
-  # def first_book_author_name
-  #   has_attribute?("first_book_author_name") ? self["first_book_author_name"] : books.first.author_name
-  # end
-
-  # def upper_first_book_author_name
-  #   has_attribute?("upper_first_book_author_name") ? self["upper_first_book_author_name"] : first_book_author_name.upcase
-  # end
-
-  # PROBLEM: changed ruby
-  # def famous_co_authors
-  #   book_with_most_bookmarks&.co_authors || []
-  # end
-
-  # PROBLEM: changed ruby (and didn't implement)
-  # basic attribute with uses that doesn't use a virtual attribute
-  # def book_with_most_bookmarks
-  #   books.max_by { |book| book.bookmarks.size }
-  # end
-
+  # has_one ordered by a virtual attribute (arel_total) — tests that scoped
+  # has_one works when the ordering column is itself a correlated subquery
   has_one :book_with_most_bookmarks, -> { order(:total_bookmarks => :desc) }, :class_name => "Book"
-  # # PROBLEM: changed ruby virtual_attribute to delegate
-  # # attribute using a relation
-  # virtual_delegate :name, :to => :first_book, :prefix => true, :type => :string
-  # # PROBLEM: changed ruby virtual_attribute to delegate
-  # # attribute on a double relation (delegates to a delegate)
-  # virtual_delegate :author_name, :to => :first_book, :prefix => true, :type => :string
-  # # uses another virtual attribute that uses a relation
-  # virtual_attribute :upper_first_book_author_name, :string, :arel => (lambda { |t| t[:first_book_author_name].upcase })
-  # :uses points to a virtual_attribute that has a :uses with a hash
-  # NOTE: Please do not change the :uses format here.
-  #   This intentionally tests :uses with an array: [:bwmb, {:books => co_a}]
-  #   vs a more condensed format: {:bwmb => {}, :books => co_a}
-  # NOTE: no longer need this since uses has been deprecated
-  has_many :famous_co_authors, :through => :book_with_most_bookmarks, :source => :co_authors
+
+  # delegate to has_one
+  arel_attribute :first_book_name, :string, through: :first_book, source: :name
+  # delegate to a delegate (has_one -> belongs_to delegate)
+  arel_attribute :first_book_author_name, :string, through: :first_book, source: :author_name
+  # arel attribute that builds on a delegate
+  arel_attribute(:upper_first_book_author_name, :string) { |t| Arel::Nodes::NamedFunction.new("UPPER", [t[:first_book_author_name]]) }
+
+  def upper_first_book_author_name
+    has_attribute?("upper_first_book_author_name") ? self["upper_first_book_author_name"] : first_book_author_name&.upcase
+  end
 
   def self.create_with_books(count)
     create!(:name => "foo").tap { |author| author.create_books(count) }
@@ -156,25 +120,24 @@ class Book < TestRecord
   scope :ordered,   -> { order(:created_on => :desc) }
   scope :published, -> { where(:published => true)  }
   scope :wip,       -> { where(:published => false) }
-  # # this tests delegate
-  # # this also tests an attribute :uses clause with a single symbol
-  # virtual_delegate :name, :to => :author, :prefix => true, :type => :string
-  # # this tests delegates to named child attribute
-  # virtual_delegate :author_name2, :to => "author.name", :type => :string
-  # # delegate to a polymorphic
-  # virtual_delegate :description, :to => :current_photo, :prefix => true, :type => :string, :allow_nil => true
+  # delegate to belongs_to (different table)
+  arel_attribute :author_name, :string, through: :author, source: :name
+  # delegate to a polymorphic has_one
+  arel_attribute :current_photo_description, :string, through: :current_photo, source: :description
 
-  # # simple uses to a virtual attribute (depends on author_name delegate)
-  # virtual_attribute :upper_author_name, :string, :arel => (lambda { |t| t[:author_name].upcase } )
-  # virtual_attribute :upper_author_name_def, :string, :arel => (lambda { |t| Arel::Nodes::NamedFunction.new("COALESCE", [t[:upper_author_name], "other"]) } )
+  # arel attribute that builds on a delegate
+  arel_attribute(:upper_author_name, :string) { |t| Arel::Nodes::NamedFunction.new("UPPER", [t[:author_name]]) }
 
-  # def upper_author_name
-  #   has_attribute?("upper_author_name") ? self["upper_author_name"] : author_name.upcase
-  # end
+  def upper_author_name
+    has_attribute?("upper_author_name") ? self["upper_author_name"] : author_name&.upcase
+  end
 
-  # def upper_author_name_def
-  #   has_attribute?("upper_author_name_def") ? self["upper_author_name_def"] : upper_author_name || "other"
-  # end
+  # chained arel attribute: builds on upper_author_name which builds on author_name delegate
+  arel_attribute(:upper_author_name_def, :string) { |t| Arel::Nodes::NamedFunction.new("COALESCE", [t[:upper_author_name], Arel.sql("'other'")]) }
+
+  def upper_author_name_def
+    has_attribute?("upper_author_name_def") ? self["upper_author_name_def"] : upper_author_name || "other"
+  end
 end
 
 class Bookmark < TestRecord
