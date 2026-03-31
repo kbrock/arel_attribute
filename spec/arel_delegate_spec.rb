@@ -181,6 +181,18 @@ RSpec.describe "arel_attribute with through:" do
     it "resolves has_one ordered by arel_total" do
       expect(author.book_with_most_bookmarks).to eq(book1)
     end
+
+    it "generates SQL with subquery, not a raw column name" do
+      rel = Book.where(:author_id => author.id).order(:total_bookmarks => :desc)
+      expect(rel.to_sql).not_to include(%q{"total_bookmarks"})
+      expect(rel.to_sql).to match(/SELECT COUNT/i)
+    end
+
+    it "uses subquery in association scope" do
+      sql = author.association(:book_with_most_bookmarks).scope.to_sql
+      expect(sql).not_to include(%q{"total_bookmarks"})
+      expect(sql).to match(/ORDER BY/i)
+    end
   end
 
   describe "has_many scoped by delegate (books_with_authors)" do

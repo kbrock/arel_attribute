@@ -117,6 +117,7 @@ class Book < TestRecord
   has_many :photos, :as => :imageable, :class_name => "Photo"
   has_one :current_photo, -> { all.merge(Photo.order(:id => :desc)) }, :as => :imageable, :class_name => "Photo"
 
+  arel_total :total_bookmarks, :bookmarks
   scope :ordered,   -> { order(:created_on => :desc) }
   scope :published, -> { where(:published => true)  }
   scope :wip,       -> { where(:published => false) }
