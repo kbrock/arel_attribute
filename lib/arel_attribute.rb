@@ -38,7 +38,7 @@ module ArelAttribute
           # Only call the ruby getter if the method is explicitly defined
           # (not an AR-generated attribute method, which would recurse back here).
           if self.class.method_defined?(attr_name, false) ||
-             self.class.private_method_defined?(attr_name, false)
+              self.class.private_method_defined?(attr_name, false)
             return send(attr_name)
           end
         end
