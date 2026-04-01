@@ -18,7 +18,39 @@ If bundler is not being used to manage dependencies, install the gem by executin
 
 ## Usage
 
-TODO: Write usage instructions here
+Define virtual attributes backed by SQL expressions on your ActiveRecord models:
+
+```ruby
+class Author < ApplicationRecord
+  has_many :books
+
+  # Virtual attribute from a SQL expression
+  arel_attribute(:uppername, :string) { |t| Arel::Nodes::NamedFunction.new("UPPER", [t[:name]]) }
+  def uppername
+    has_attribute?(:uppername) ? attribute[:uppername] : name.upcase
+  end
+  # Delegate to an association's column
+  arel_attribute :first_book_name, :string, through: :first_book, source: :name
+  def uppername
+    has_attribute?(:firt_book_name) ? attribute[:first_book_name] : first_book&.name
+  end
+  # Count of a has_many association (correlated subquery)
+  arel_total :total_books, :books
+end
+```
+
+Virtual attributes work transparently in `where`, `order`, and `select`:
+
+```ruby
+Author.where(:uppername => "ALICE")
+# SELECT * FROM authors WHERE (UPPER(name)) = 'ALICE'
+
+Author.order(:total_books => :desc)
+# SELECT * FROM authors ORDER BY (SELECT COUNT(*) FROM books WHERE books.author_id = authors.id) DESC
+
+Author.select(:id, :total_books)
+# SELECT id, (SELECT COUNT(*) ...) AS total_books FROM authors
+```
 
 ## Development
 
