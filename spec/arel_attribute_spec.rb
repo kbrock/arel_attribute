@@ -22,7 +22,6 @@ RSpec.describe ArelAttribute do
     end
   end
 
-
   describe "arel_table (TableProxy)" do
     it "returns an ArelAttribute node for virtual attributes" do
       node = Author.arel_table[:doubled]

@@ -1,0 +1,16 @@
+# Inherit Standard's config, override only what we disagree with.
+inherit_gem:
+  standard: config/base.yml
+
+AllCops:
+  SuggestExtensions: false
+
+# Allow column alignment in schemas, hashes, etc.
+Layout/ExtraSpacing:
+  AllowForAlignment: true
+Layout/HashAlignment:
+  Enabled: false
+
+# Allow compact ternaries in map blocks
+Style/NestedTernaryOperator:
+  Enabled: false

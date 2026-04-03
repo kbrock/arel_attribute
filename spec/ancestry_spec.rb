@@ -90,7 +90,7 @@ RSpec.describe "Ancestry-style arel attributes" do
     it "orders by parent_id with nulls (symbol)" do
       results = Person.where(id: [a.id, b.id, c.id]).order(:parent_id, :id)
       if Person.is_pg?
-      # pg uses nulls_first standard
+        # pg uses nulls_first standard
         expect(results.map(&:id)).to eq([b.id, c.id, a.id])
       else
         expect(results.map(&:id)).to eq([a.id, b.id, c.id])
@@ -229,12 +229,12 @@ RSpec.describe "Ancestry-style arel attributes" do
   describe "joins" do
     it "joins children and filters" do
       b.update!(name: "mid")
-      results = Person.joins(:children).where(children: { name: "mid" }).order(:id)
+      results = Person.joins(:children).where(children: {name: "mid"}).order(:id)
       expect(results.map(&:id)).to eq([a.id])
     end
 
     it "joins children and filters by virtual attribute" do
-      results = Person.joins(:children).where(children: { root_id: a.id }).distinct.order(:id)
+      results = Person.joins(:children).where(children: {root_id: a.id}).distinct.order(:id)
       expect(results.map(&:id)).to eq([a.id, b.id])
     end
   end

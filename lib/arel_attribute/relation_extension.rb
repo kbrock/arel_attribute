@@ -28,7 +28,13 @@ module ArelAttribute
       # When DISTINCT is used with ORDER BY on virtual arel attributes,
       # PG/MySQL require the ORDER BY expressions to appear in the SELECT list.
       if distinct_value
-        selected_names = select_values.map { |v| v.is_a?(Symbol) ? v.to_s : (v.is_a?(String) ? v : nil) }.compact.to_set
+        selected_names = select_values.map { |v|
+          if v.is_a?(Symbol)
+            v.to_s
+          else
+            (v.is_a?(String) ? v : nil)
+          end
+        }.compact.to_set
         order_values.each do |o|
           expr = o.is_a?(Arel::Nodes::Ordering) ? o.expr : o
           if expr.is_a?(Arel::Nodes::ArelAttribute) && expr.name && !selected_names.include?(expr.name)

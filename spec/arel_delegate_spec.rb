@@ -3,7 +3,7 @@
 RSpec.describe "arel_attribute with through:" do
   describe "belongs_to delegate (Book -> Author)" do
     let!(:author) { Author.create!(name: "Alice") }
-    let!(:book)   { Book.create!(name: "Ruby Guide", author: author) }
+    let!(:book) { Book.create!(name: "Ruby Guide", author: author) }
     let!(:orphan) { Book.create!(name: "Anonymous") }
 
     it "delegates to the association" do
@@ -37,10 +37,10 @@ RSpec.describe "arel_attribute with through:" do
   end
 
   describe "self-join delegate (Author -> teacher)" do
-    let!(:grand)   { Author.create!(name: "Grand") }
-    let!(:parent)  { Author.create!(name: "Parent", teacher: grand) }
-    let!(:child1)  { Author.create!(name: "Child1", teacher: parent) }
-    let!(:child2)  { Author.create!(name: "Child2", teacher: parent) }
+    let!(:grand) { Author.create!(name: "Grand") }
+    let!(:parent) { Author.create!(name: "Parent", teacher: grand) }
+    let!(:child1) { Author.create!(name: "Child1", teacher: parent) }
+    let!(:child2) { Author.create!(name: "Child2", teacher: parent) }
 
     it "delegates to parent" do
       expect(child1.teacher_name).to eq("Parent")
@@ -78,7 +78,7 @@ RSpec.describe "arel_attribute with through:" do
 
   describe "has_one polymorphic delegate (Author -> current_photo)" do
     let!(:author) { Author.create!(name: "Alice") }
-    let!(:photo)  { Photo.create!(imageable: author, description: "headshot", purpose: "profile") }
+    let!(:photo) { Photo.create!(imageable: author, description: "headshot", purpose: "profile") }
 
     it "delegates to has_one" do
       expect(author.current_photo_description).to eq("headshot")
@@ -102,7 +102,7 @@ RSpec.describe "arel_attribute with through:" do
 
   describe "has_one with scope delegate (Author -> fancy_photo)" do
     let!(:author) { Author.create!(name: "Alice") }
-    let!(:fancy)  { Photo.create!(imageable: author, description: "glamour", purpose: "fancy") }
+    let!(:fancy) { Photo.create!(imageable: author, description: "glamour", purpose: "fancy") }
     let!(:casual) { Photo.create!(imageable: author, description: "selfie", purpose: "casual") }
 
     it "delegates respecting scope" do
@@ -117,8 +117,8 @@ RSpec.describe "arel_attribute with through:" do
 
   describe "has_one delegate (Author -> first_book)" do
     let!(:author) { Author.create!(name: "Alice") }
-    let!(:book1)  { Book.create!(name: "First", author: author) }
-    let!(:book2)  { Book.create!(name: "Second", author: author) }
+    let!(:book1) { Book.create!(name: "First", author: author) }
+    let!(:book2) { Book.create!(name: "Second", author: author) }
 
     it "delegates to has_one" do
       expect(author.first_book_name).to eq("First")
@@ -141,7 +141,7 @@ RSpec.describe "arel_attribute with through:" do
 
   describe "arel attribute building on a delegate" do
     let!(:author) { Author.create!(name: "Alice") }
-    let!(:book)   { Book.create!(name: "Ruby Guide", author: author) }
+    let!(:book) { Book.create!(name: "Ruby Guide", author: author) }
 
     it "computes upper_author_name from delegate (ruby)" do
       expect(book.upper_author_name).to eq("ALICE")
@@ -153,7 +153,7 @@ RSpec.describe "arel_attribute with through:" do
     end
 
     it "chains arel on arel on delegate (upper_author_name_def)" do
-      orphan = Book.create!(name: "No Author")
+      Book.create!(name: "No Author")
       results = Book.select(:id, :upper_author_name_def).order(:id).to_a
       expect { expect(results.map(&:upper_author_name_def)).to eq(["ALICE", "other"]) }.to_not make_database_queries
     end
@@ -170,12 +170,12 @@ RSpec.describe "arel_attribute with through:" do
 
   describe "has_one ordered by virtual attribute" do
     let!(:author) { Author.create!(name: "Alice") }
-    let!(:book1)  { Book.create!(name: "Popular", author: author) }
-    let!(:book2)  { Book.create!(name: "Niche", author: author) }
+    let!(:book1) { Book.create!(name: "Popular", author: author) }
+    let!(:book2) { Book.create!(name: "Niche", author: author) }
 
     before do
       3.times { Bookmark.create!(book: book1) }
-      1.times { Bookmark.create!(book: book2) }
+      Bookmark.create!(book: book2)
     end
 
     it "resolves has_one ordered by arel_total" do
@@ -183,22 +183,22 @@ RSpec.describe "arel_attribute with through:" do
     end
 
     it "generates SQL with subquery, not a raw column name" do
-      rel = Book.where(:author_id => author.id).order(:total_bookmarks => :desc)
-      expect(rel.to_sql).not_to include(%q{"total_bookmarks"})
+      rel = Book.where(author_id: author.id).order(total_bookmarks: :desc)
+      expect(rel.to_sql).not_to include('"total_bookmarks"')
       expect(rel.to_sql).to match(/SELECT COUNT/i)
     end
 
     it "uses subquery in association scope" do
       sql = author.association(:book_with_most_bookmarks).scope.to_sql
-      expect(sql).not_to include(%q{"total_bookmarks"})
+      expect(sql).not_to include('"total_bookmarks"')
       expect(sql).to match(/ORDER BY/i)
     end
   end
 
   describe "has_many scoped by delegate (books_with_authors)" do
     let!(:author) { Author.create!(name: "Alice") }
-    let!(:named)  { Book.create!(name: "Named", author: author) }
-    let!(:anon)   { Book.create!(name: "Anon") }
+    let!(:named) { Book.create!(name: "Named", author: author) }
+    let!(:anon) { Book.create!(name: "Anon") }
     let!(:noname) { Book.create!(author: author) }
 
     it "filters using the delegate in the scope" do

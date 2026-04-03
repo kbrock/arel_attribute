@@ -18,7 +18,7 @@
 #   expect(MyModel.includes(:relation).map(&:attribute)).to eq(%w[foo foo foo])
 
 RSpec::Matchers.define :preload_values do |field, expected_values|
-  match(:notify_expectation_failures => true) do |block|
+  match(notify_expectation_failures: true) do |block|
     records = block.respond_to?(:call) ? block.call : block
     records = records.try(:order, :id) if records.respond_to?(:order) && records.try(:order_values).blank?
     records.try(:load)

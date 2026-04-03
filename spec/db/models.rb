@@ -12,18 +12,18 @@ end
 
 class Author < TestRecord
   # basically a :parent_id relationship
-  belongs_to :teacher, :foreign_key => :teacher_id, :class_name => "Author", :optional => true
-  has_many :students, :foreign_key => :teacher_id, :class_name => "Author"
+  belongs_to :teacher, foreign_key: :teacher_id, class_name: "Author", optional: true
+  has_many :students, foreign_key: :teacher_id, class_name: "Author"
   has_many :books
-  has_many :ordered_books,   -> { ordered },   :class_name => "Book"
-  has_many :published_books, -> { published }, :class_name => "Book"
-  has_many :wip_books,       -> { wip },       :class_name => "Book"
-  has_and_belongs_to_many :co_books,           :class_name => "Book"
-  has_many :bookmarks,                         :class_name => "Bookmark", :through => :books
-  has_many :photos, :as => :imageable, :class_name => "Photo"
-  has_one :current_photo, -> { all.merge(Photo.order(:id => :desc)) }, :as => :imageable, :class_name => "Photo"
-  has_one :fancy_photo, -> { where(:purpose => "fancy") }, :as => :imageable, :class_name => "Photo"
-  has_one :first_book, -> { order(:id) }, :class_name => "Book"
+  has_many :ordered_books, -> { ordered }, class_name: "Book"
+  has_many :published_books, -> { published }, class_name: "Book"
+  has_many :wip_books, -> { wip }, class_name: "Book"
+  has_and_belongs_to_many :co_books, class_name: "Book"
+  has_many :bookmarks, class_name: "Bookmark", through: :books
+  has_many :photos, as: :imageable, class_name: "Photo"
+  has_one :current_photo, -> { all.merge(Photo.order(id: :desc)) }, as: :imageable, class_name: "Photo"
+  has_one :fancy_photo, -> { where(purpose: "fancy") }, as: :imageable, class_name: "Photo"
+  has_one :first_book, -> { order(:id) }, class_name: "Book"
 
   arel_total :total_books, :books
   arel_total :total_books_published, :published_books
@@ -32,12 +32,12 @@ class Author < TestRecord
   arel_total :total_ordered_books, :ordered_books
   # virtual total using has_many :through
   arel_total :total_bookmarks, :bookmarks
-  alias v_total_bookmarks total_bookmarks
+  alias_method :v_total_bookmarks, :total_bookmarks
   # virtual total using has_and_belongs_to_many
   arel_total :total_co_books, :co_books
 
-  has_many :recently_published_books, -> { published.order(:created_on => :desc) },
-           :class_name => "Book", :foreign_key => "author_id"
+  has_many :recently_published_books, -> { published.order(created_on: :desc) },
+    class_name: "Book", foreign_key: "author_id"
 
   arel_total :total_recently_published_books, :recently_published_books
   arel_average :average_recently_published_books_rating, :recently_published_books, :rating
@@ -53,11 +53,11 @@ class Author < TestRecord
   # delegate to has_one with scope
   arel_attribute :fancy_photo_description, :string, through: :fancy_photo, source: :description
 
-  has_many :named_books, -> { where.not(:name => nil) }, :class_name => "Book"
+  has_many :named_books, -> { where.not(name: nil) }, class_name: "Book"
   # depends on Book#author_name delegate being filterable in SQL
-  has_many :books_with_authors, -> { where.not(:author_name => nil).where.not(:name => nil) }, :class_name => "Book"
+  has_many :books_with_authors, -> { where.not(author_name: nil).where.not(name: nil) }, class_name: "Book"
   arel_total :total_named_books, :named_books
-  alias v_total_named_books total_named_books
+  alias_method :v_total_named_books, :total_named_books
 
   def nick_or_name
     has_attribute?("nick_or_name") ? self["nick_or_name"] : nickname || name
@@ -84,7 +84,7 @@ class Author < TestRecord
 
   # has_one ordered by a virtual attribute (arel_total) — tests that scoped
   # has_one works when the ordering column is itself a correlated subquery
-  has_one :book_with_most_bookmarks, -> { order(:total_bookmarks => :desc) }, :class_name => "Book"
+  has_one :book_with_most_bookmarks, -> { order(total_bookmarks: :desc) }, class_name: "Book"
 
   # delegate to has_one
   arel_attribute :first_book_name, :string, through: :first_book, source: :name
@@ -98,12 +98,12 @@ class Author < TestRecord
   end
 
   def self.create_with_books(count)
-    create!(:name => "foo").tap { |author| author.create_books(count) }
+    create!(name: "foo").tap { |author| author.create_books(count) }
   end
 
   def create_books(count, create_attrs = {})
     Array.new(count) do
-      books.create({:name => "bar"}.merge(create_attrs))
+      books.create({name: "bar"}.merge(create_attrs))
     end
   end
 end
@@ -111,16 +111,16 @@ end
 class Book < TestRecord
   has_many :bookmarks
   belongs_to :author
-  has_and_belongs_to_many :co_authors, :class_name => "Author"
-  belongs_to :author_or_bookmark, :polymorphic => true, :foreign_key => "author_id", :foreign_type => "author_type"
+  has_and_belongs_to_many :co_authors, class_name: "Author"
+  belongs_to :author_or_bookmark, polymorphic: true, foreign_key: "author_id", foreign_type: "author_type"
 
-  has_many :photos, :as => :imageable, :class_name => "Photo"
-  has_one :current_photo, -> { all.merge(Photo.order(:id => :desc)) }, :as => :imageable, :class_name => "Photo"
+  has_many :photos, as: :imageable, class_name: "Photo"
+  has_one :current_photo, -> { all.merge(Photo.order(id: :desc)) }, as: :imageable, class_name: "Photo"
 
   arel_total :total_bookmarks, :bookmarks
-  scope :ordered,   -> { order(:created_on => :desc) }
-  scope :published, -> { where(:published => true)  }
-  scope :wip,       -> { where(:published => false) }
+  scope :ordered, -> { order(created_on: :desc) }
+  scope :published, -> { where(published: true) }
+  scope :wip, -> { where(published: false) }
   # delegate to belongs_to (different table)
   arel_attribute :author_name, :string, through: :author, source: :name
   # delegate to a polymorphic has_one
@@ -146,23 +146,23 @@ class Bookmark < TestRecord
 end
 
 class Photo < TestRecord
-  belongs_to :imageable, :polymorphic => true
+  belongs_to :imageable, polymorphic: true
 end
 
 # these are just here so we don't monkey patch them in our tests
 class SpecialBook < Book
-  default_scope { where(:special => true) }
+  default_scope { where(special: true) }
 
-  self.table_name = 'books'
+  self.table_name = "books"
 end
 
 class SpecialAuthor < Author
-  self.table_name = 'authors'
+  self.table_name = "authors"
 
   has_many :special_books,
-           :class_name => "SpecialBook", :foreign_key => "author_id"
+    class_name: "SpecialBook", foreign_key: "author_id"
   has_many :published_special_books, -> { published },
-           :class_name => "SpecialBook", :foreign_key => "author_id"
+    class_name: "SpecialBook", foreign_key: "author_id"
 
   arel_total :total_special_books, :special_books
   arel_total :total_special_books_published, :published_special_books
@@ -191,12 +191,12 @@ module ArelAncestry
       pk = primary_key.to_sym
 
       attr_list = if attributes == true
-                    [:path_ids, :root_id, :parent_id, :child_path]
-                  elsif attributes == false
-                    []
-                  else
-                    Array(attributes).map(&:to_sym)
-                  end
+        [:path_ids, :root_id, :parent_id, :child_path]
+      elsif attributes == false
+        []
+      else
+        Array(attributes).map(&:to_sym)
+      end
 
       if attr_list.include?(:path_ids)
         # arel_attribute(:path_ids, :integer) do |t|
@@ -286,6 +286,7 @@ module ArelAncestry
       Arel::Nodes::Case.new(path).when(Arel.sql("'/'")).then(root_val).else(not_root)
     end
   end
+
   module MaterializedPath2
     def materialized_path2_root_id_arel(t, pk = :id, ancestry_column = :path)
       path = t[ancestry_column]
@@ -308,7 +309,7 @@ module ArelAncestry
         if is_mysql?
           # SUBSTRING_INDEX(SUBSTRING_INDEX(path, '/', -2), '/', 1) of /1/2/3/
           parent_slash = sql_fn("SUBSTRING_INDEX", [path, slash, -2]) # => 3/
-          sql_fn("SUBSTRING_INDEX", [parent_slash, slash, 1, ])       # => 3
+          sql_fn("SUBSTRING_INDEX", [parent_slash, slash, 1])       # => 3
         else
           # RTRIM(REPLACE(path, RTRIM(RTRIM(path, '/'), REPLACE(path, '/', '')), ''), '/')
           no_slash_chars = sql_fn("REPLACE", path, slash, empty)                # => 123

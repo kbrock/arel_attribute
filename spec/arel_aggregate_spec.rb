@@ -15,7 +15,7 @@ RSpec.describe ArelAttribute::ArelAggregate do
 
   describe ".where" do
     it "supports arel_totals hash syntax" do
-      Author.where(:total_books => 5).first
+      Author.where(total_books: 5).first
     end
 
     it "supports arel_totals arel syntax" do
@@ -65,7 +65,7 @@ RSpec.describe ArelAttribute::ArelAggregate do
         expect do
           expect(author0.total_books).to eq(0)
           expect(author2.total_books).to eq(2)
-        end.to make_database_queries(:count => 2)
+        end.to make_database_queries(count: 2)
       end
 
       it "calculates totals with preloaded association" do
@@ -94,7 +94,7 @@ RSpec.describe ArelAttribute::ArelAggregate do
           author_query = Author.select(:id, :total_books)
           expect(author_query).to match_array([author3, author1, author2])
           expect(author_query.map(&:total_books)).to match_array([3, 1, 2])
-        end.to make_database_queries(:count => 1)
+        end.to make_database_queries(count: 1)
       end
 
       it "with no associated records calculates totals with attribute" do
@@ -109,11 +109,11 @@ RSpec.describe ArelAttribute::ArelAggregate do
     context "virtual sum of a virtual sum" do
       it "calculates sum of a sum" do
         author2 = Author.create
-        author2.create_books(2, :published => true, :rating => 5) # 2*5
+        author2.create_books(2, published: true, rating: 5) # 2*5
         author0 = Author.create
-        author0.create_books(3, :published => true, :rating => 2) # 3*2
+        author0.create_books(3, published: true, rating: 2) # 3*2
         author1 = Author.create_with_books(1)
-        author1.create_books(1, :published => true, :rating => 0) # 0
+        author1.create_books(1, published: true, rating: 0) # 0
 
         expect(Author.sum(:sum_recently_published_books_rating)).to eq(16)
       end
@@ -122,9 +122,9 @@ RSpec.describe ArelAttribute::ArelAggregate do
     context "with a has_many that includes a scope" do
       it "sorts by total" do
         author2 = Author.create_with_books(2)
-        author2.create_books(1, :published => true)
+        author2.create_books(1, published: true)
         author0 = Author.create
-        author0.create_books(2, :published => true)
+        author0.create_books(2, published: true)
         author1 = Author.create_with_books(1)
 
         expect(Author.order(:total_books_published).pluck(:id))
@@ -135,9 +135,9 @@ RSpec.describe ArelAttribute::ArelAggregate do
 
       it "calculates totals locally" do
         author0 = Author.create
-        author0.create_books(2, :published => true)
+        author0.create_books(2, published: true)
         author2 = Author.create_with_books(2)
-        author2.create_books(1, :published => true)
+        author2.create_books(1, published: true)
 
         expect do
           expect(Author.find(author0.id).total_books).to eq(2)
@@ -146,16 +146,16 @@ RSpec.describe ArelAttribute::ArelAggregate do
           expect(Author.find(author2.id).total_books).to eq(3)
           expect(Author.find(author2.id).total_books_published).to eq(1)
           expect(Author.find(author2.id).total_books_in_progress).to eq(2)
-        end.to make_database_queries(:count => 12)
+        end.to make_database_queries(count: 12)
       end
 
       it "can bring back totals in primary query" do
         author3 = Author.create_with_books(3)
-        author3.create_books(4, :published => true)
+        author3.create_books(4, published: true)
         author1 = Author.create_with_books(1)
-        author1.create_books(5, :published => true)
+        author1.create_books(5, published: true)
         author2 = Author.create_with_books(2)
-        author2.create_books(6, :published => true)
+        author2.create_books(6, published: true)
 
         expect do
           cols = %i[id total_books total_books_published total_books_in_progress]
@@ -164,18 +164,18 @@ RSpec.describe ArelAttribute::ArelAggregate do
           expect(author_query.map(&:total_books)).to match_array([7, 6, 8])
           expect(author_query.map(&:total_books_published)).to match_array([4, 5, 6])
           expect(author_query.map(&:total_books_in_progress)).to match_array([3, 1, 2])
-        end.to make_database_queries(:count => 1)
+        end.to make_database_queries(count: 1)
       end
     end
 
     context "with a has_many that includes an order" do
       it "sorts by total" do
         author2 = Author.create_with_books(2)
-        author2.create_books(2, :published => true, :rating => 5)
+        author2.create_books(2, published: true, rating: 5)
         author0 = Author.create
-        author0.create_books(3, :published => true, :rating => 2)
+        author0.create_books(3, published: true, rating: 2)
         author1 = Author.create_with_books(1)
-        author1.create_books(1, :published => true, :rating => 0)
+        author1.create_books(1, published: true, rating: 0)
 
         expect(Author.order(:total_recently_published_books).pluck(:id))
           .to eq([author1, author2, author0].map(&:id))
@@ -185,25 +185,25 @@ RSpec.describe ArelAttribute::ArelAggregate do
 
       it "calculates totals locally" do
         author0 = Author.create
-        author0.create_books(2, :published => true, :rating => 2)
+        author0.create_books(2, published: true, rating: 2)
         author2 = Author.create_with_books(2)
-        author2.create_books(1, :published => true, :rating => 5)
+        author2.create_books(1, published: true, rating: 5)
 
         expect do
           expect(Author.find(author0.id).total_recently_published_books).to eq(2)
           expect(Author.find(author0.id).sum_recently_published_books_rating).to eq(4)
           expect(Author.find(author2.id).total_recently_published_books).to eq(1)
           expect(Author.find(author2.id).sum_recently_published_books_rating).to eq(5)
-        end.to make_database_queries(:count => 8)
+        end.to make_database_queries(count: 8)
       end
 
       it "can bring back totals in primary query" do
         author3 = Author.create_with_books(3)
-        author3.create_books(2, :published => true, :rating => 2)
+        author3.create_books(2, published: true, rating: 2)
         author1 = Author.create_with_books(1)
-        author1.create_books(3, :published => true, :rating => 1)
+        author1.create_books(3, published: true, rating: 1)
         author2 = Author.create_with_books(2)
-        author2.create_books(1, :published => true, :rating => 5)
+        author2.create_books(1, published: true, rating: 5)
 
         expect do
           cols = %i[id total_recently_published_books sum_recently_published_books_rating]
@@ -211,7 +211,7 @@ RSpec.describe ArelAttribute::ArelAggregate do
           expect(author_query).to match_array([author3, author1, author2])
           expect(author_query.map(&:total_recently_published_books)).to match_array([2, 3, 1])
           expect(author_query.map(&:sum_recently_published_books_rating)).to match_array([4, 3, 5])
-        end.to make_database_queries(:count => 1)
+        end.to make_database_queries(count: 1)
       end
     end
 
@@ -219,26 +219,26 @@ RSpec.describe ArelAttribute::ArelAggregate do
       context "with a has_many that includes a scope" do
         it "sorts by total" do
           author2 = SpecialAuthor.create_with_books(2)
-          author2.create_books(5, :special => true)
-          author2.create_books(1, :special => true, :published => true)
+          author2.create_books(5, special: true)
+          author2.create_books(1, special: true, published: true)
           author0 = SpecialAuthor.create
-          author0.create_books(2, :special => true)
-          author0.create_books(2, :special => true, :published => true)
+          author0.create_books(2, special: true)
+          author0.create_books(2, special: true, published: true)
           author1 = SpecialAuthor.create_with_books(1)
 
-            expect(SpecialAuthor.order(:total_special_books).pluck(:id))
+          expect(SpecialAuthor.order(:total_special_books).pluck(:id))
             .to eq([author1, author0, author2].map(&:id))
-            expect(SpecialAuthor.order(:total_special_books_published).pluck(:id))
+          expect(SpecialAuthor.order(:total_special_books_published).pluck(:id))
             .to eq([author1, author2, author0].map(&:id))
         end
 
         it "calculates totals locally" do
           author0 = SpecialAuthor.create
-          author0.create_books(2, :special => true)
-          author0.create_books(2, :special => true, :published => true)
+          author0.create_books(2, special: true)
+          author0.create_books(2, special: true, published: true)
           author2 = SpecialAuthor.create_with_books(2)
-          author2.create_books(5, :special => true)
-          author2.create_books(1, :special => true, :published => true)
+          author2.create_books(5, special: true)
+          author2.create_books(1, special: true, published: true)
 
           expect do
             expect(SpecialAuthor.find(author0.id).total_books).to eq(4)
@@ -247,18 +247,18 @@ RSpec.describe ArelAttribute::ArelAggregate do
             expect(SpecialAuthor.find(author2.id).total_books).to eq(8)
             expect(SpecialAuthor.find(author2.id).total_special_books).to eq(6)
             expect(SpecialAuthor.find(author2.id).total_special_books_published).to eq(1)
-          end.to make_database_queries(:count => 12)
+          end.to make_database_queries(count: 12)
         end
 
         it "can bring back totals in primary query" do
           author3 = SpecialAuthor.create_with_books(3)
-          author3.create_books(4, :published => true)
+          author3.create_books(4, published: true)
           author1 = SpecialAuthor.create_with_books(1)
-          author1.create_books(2, :special => true)
-          author1.create_books(2, :special => true, :published => true)
+          author1.create_books(2, special: true)
+          author1.create_books(2, special: true, published: true)
           author2 = SpecialAuthor.create_with_books(2)
-          author2.create_books(5, :special => true)
-          author2.create_books(1, :special => true, :published => true)
+          author2.create_books(5, special: true)
+          author2.create_books(1, special: true, published: true)
 
           expect do
             cols = %i[
@@ -274,7 +274,7 @@ RSpec.describe ArelAttribute::ArelAggregate do
             expect(author_query.map(&:total_books_published)).to match_array([4, 2, 1])
             expect(author_query.map(&:total_special_books)).to match_array([0, 4, 6])
             expect(author_query.map(&:total_special_books_published)).to match_array([0, 2, 1])
-          end.to make_database_queries(:count => 1)
+          end.to make_database_queries(count: 1)
         end
       end
     end
@@ -304,7 +304,7 @@ RSpec.describe ArelAttribute::ArelAggregate do
         ms = mc.select(:id, :total_books)
         expect(ms).to match_array([m3, m2, m1])
         expect(ms.map(&:total_books)).to match_array([3, 2, 1])
-      end.to make_database_queries(:count => 1)
+      end.to make_database_queries(count: 1)
     end
 
     def model_with_children(count)
@@ -356,14 +356,14 @@ RSpec.describe ArelAttribute::ArelAggregate do
       model_with_children(3) # 6 =  3 books @ 2 bookmarks each
 
       expect do
-        expect(Author.select(:id, :total_bookmarks).order(:total_bookmarks => :desc).map(&:total_bookmarks)).to eq([6, 2, 0])
-      end.to make_database_queries(:count => 1)
+        expect(Author.select(:id, :total_bookmarks).order(total_bookmarks: :desc).map(&:total_bookmarks)).to eq([6, 2, 0])
+      end.to make_database_queries(count: 1)
     end
 
     def model_with_children(count)
       Author.create_with_books(count).tap do |author|
         author.books.each do |book|
-          y = Array.new(2) do
+          Array.new(2) do
             # Bookmark.factory exists, but not bookmarks.factory
             book.bookmarks.create(name: "mark")
           end
@@ -400,20 +400,20 @@ RSpec.describe ArelAttribute::ArelAggregate do
       let(:authors) { [author, author2, author3, author4] }
       let(:author) do
         Author.create_with_books(1).tap do |author|
-          author.create_books(1, :published => true, :rating => 4)
-          author.create_books(1, :published => true, :rating => 2)
-          author.create_books(1, :published => true)
+          author.create_books(1, published: true, rating: 4)
+          author.create_books(1, published: true, rating: 2)
+          author.create_books(1, published: true)
         end
       end
 
       let(:author2) do
         Author.create.tap do |author|
-          author.create_books(1, :published => true, :rating => 5)
+          author.create_books(1, published: true, rating: 5)
         end
       end
 
       let(:author3) { Author.create }
-      let(:author4) { Author.create.tap { |a| a.create_books(1, :published => true) } }
+      let(:author4) { Author.create.tap { |a| a.create_books(1, published: true) } }
 
       describe ":sum" do
         # NOTE: rails converts the nil to a 0
@@ -422,7 +422,7 @@ RSpec.describe ArelAttribute::ArelAggregate do
 
           expect do
             expect(authors.map(&:sum_recently_published_books_rating)).to eq([6, 5, 0, 0])
-          end.to make_database_queries(:count => 4)
+          end.to make_database_queries(count: 4)
         end
 
         it "calculates sum from preloaded association" do
@@ -452,7 +452,7 @@ RSpec.describe ArelAttribute::ArelAggregate do
         it "orders by values with a nil (having the nil (defaulted to 0) first" do
           authors
           query = Author.order(:sum_recently_published_books_rating)
-            expect(query.pluck(:id)).to eq([author3, author4, author2, author].map(&:id))
+          expect(query.pluck(:id)).to eq([author3, author4, author2, author].map(&:id))
         end
       end
 
@@ -462,7 +462,7 @@ RSpec.describe ArelAttribute::ArelAggregate do
           authors
           expect do
             expect(authors.map(&:average_recently_published_books_rating)).to eq([3, 5, 0, 0])
-          end.to make_database_queries(:count => 4)
+          end.to make_database_queries(count: 4)
         end
 
         it "calculates avg from preloaded association" do
@@ -497,7 +497,7 @@ RSpec.describe ArelAttribute::ArelAggregate do
 
           expect do
             expect(authors.map(&:maximum_recently_published_books_rating)).to eq([4, 5, 0, 0])
-          end.to make_database_queries(:count => 4)
+          end.to make_database_queries(count: 4)
         end
 
         it "calculates max from preloaded association" do
@@ -532,7 +532,7 @@ RSpec.describe ArelAttribute::ArelAggregate do
 
           expect do
             expect(authors.map(&:minimum_recently_published_books_rating)).to eq([2, 5, 0, 0])
-          end.to make_database_queries(:count => 4)
+          end.to make_database_queries(count: 4)
         end
 
         it "calculates min from preloaded association" do
