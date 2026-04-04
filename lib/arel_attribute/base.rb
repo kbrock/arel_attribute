@@ -59,7 +59,12 @@ module ArelAttribute
       #
       #   arel_attribute :teacher_name, :string, through: :teacher, source: :name
       #
-      def arel_attribute(name, type, through: nil, source: name, default: nil, &block)
+      # @param ruby [true, false, nil, String] controls Ruby method generation:
+      #   true   — auto-generate from the arel expression (raises if not translatable)
+      #   false  — skip (caller defines the method manually)
+      #   nil    — skip (default, backwards compatible)
+      #   String — define a method using the given Ruby expression string
+      def arel_attribute(name, type, through: nil, source: name, default: nil, ruby: nil, &block)
         if through
           define_arel_delegate_method(name, source, through, default)
 
@@ -73,6 +78,8 @@ module ArelAttribute
         raise ArgumentError, "arel block is required for arel_attribute" unless block
         self.arel_aliases = arel_aliases.merge(name.to_s => block)
         self.arel_attribute_types = arel_attribute_types.merge(name.to_s => type)
+
+        pending_arel_ruby_methods[name.to_s] = ruby if ruby && !through
       end
 
       def arel_attribute_names
@@ -112,6 +119,13 @@ module ArelAttribute
         @arel_table ||= ArelAttribute::TableProxy.new(table_name, klass: self)
       end
 
+      # Hook into Rails' define_attribute_methods lifecycle.
+      # Called lazily on first attribute access (via method_missing).
+      # After Rails defines its methods, we batch-generate ours.
+      def define_attribute_methods # :nodoc:
+        super.tap { generate_arel_ruby_methods }
+      end
+
       private
 
       # Define a Ruby getter that delegates to the association, with DB-loaded value support.
@@ -124,6 +138,49 @@ module ArelAttribute
             target.nil? ? default : target.send(source)
           end
         end
+      end
+
+      # Attributes that need Ruby methods generated, accumulated during
+      # class definition. Keys are attribute names, values are ruby option
+      # (true for auto-derive, String for explicit body).
+      def pending_arel_ruby_methods
+        @pending_arel_ruby_methods ||= {}
+      end
+
+      # Build a module with Ruby getters for all pending arel attributes.
+      # Returns the module without including it — useful for testing/inspection.
+      def build_arel_ruby_module
+        pending = pending_arel_ruby_methods
+        return if pending.empty?
+
+        methods_source = pending.map { |name, ruby_opt|
+          ruby_body =
+            if ruby_opt == true
+              arel_node = arel_aliases[name][arel_table]
+              ArelRuby.convert(arel_node, self)
+            else
+              ruby_opt
+            end
+
+          <<~RUBY
+            def #{name}
+              has_attribute?("#{name}") ? self["#{name}"] : (#{ruby_body})
+            end
+          RUBY
+        }.join("\n")
+
+        mod = Module.new
+        mod.module_eval(methods_source, "(arel_ruby:#{name})", 1)
+        mod
+      end
+
+      # Generate and include the arel ruby methods module.
+      def generate_arel_ruby_methods
+        mod = build_arel_ruby_module
+        return unless mod
+
+        include mod
+        pending_arel_ruby_methods.clear
       end
 
       # Lazily resolve symbolic type names (e.g. :integer) to actual type objects.
