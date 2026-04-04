@@ -15,8 +15,8 @@ source /opt/homebrew/share/chruby/chruby.sh && chruby 4.0 && bundle exec rspec s
 
 Default is sqlite3. Set `DB` env var to switch:
 - `DB=sqlite3` (default)
-- `DB=postgresql` or `DB=pg`
-- `DB=mysql2` or `DB=mysql`
+- `DB=pg` for postgres
+- `DB=trilogy` for mysql
 
 ## Debugging
 

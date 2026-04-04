@@ -16,7 +16,7 @@ module ArelAttribute
       end
 
       def is_mysql?(*args)
-        ret = %w[mysql mysql2 trillian].include?(connection.adapter_name.downcase)
+        ret = %w[mysql mysql2 trilogy].include?(connection.adapter_name.downcase)
         if args.empty?
           ret
         else

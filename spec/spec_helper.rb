@@ -45,7 +45,7 @@ RSpec.configure do |config|
     # truncate at startup
     DatabaseCleaner.clean_with :truncation
     # transaction between examples (mysql requires truncation)
-    DatabaseCleaner.strategy = Database.adapter.include?("mysql") ? :truncation : :transaction
+    DatabaseCleaner.strategy = Database.is_mysql? ? :truncation : :transaction
   end
 
   config.around(:each) do |example|

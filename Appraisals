@@ -1,8 +1,5 @@
 # frozen_string_literal: true
 
-# on a mac using:
-# bundle config --global build.mysql2 "--with-mysql-dir=$(brew --prefix mysql)"
-
 %w[7.2.3 8.0.4 8.1.2].each do |ar_version|
   appraise "gemfile-#{ar_version.split(".").first(2).join}" do
     gem "activerecord", "~> #{ar_version}"
