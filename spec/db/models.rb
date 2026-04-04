@@ -59,26 +59,27 @@ class Author < TestRecord
   arel_total :total_named_books, :named_books
   alias_method :v_total_named_books, :total_named_books
 
-  def nick_or_name
-    has_attribute?("nick_or_name") ? self["nick_or_name"] : nickname || name
-  end
+  # def nick_or_name
+  #   has_attribute?("nick_or_name") ? self["nick_or_name"] : nickname || name
+  # end
 
-  # sorry. no creativity on this one (just copied nick_or_name)
-  def name_no_group
-    has_attribute?("name_no_group") ? self["name_no_group"] : nickname || name
-  end
+  # # sorry. no creativity on this one (just copied nick_or_name)
+  # def name_no_group
+  #   has_attribute?("name_no_group") ? self["name_no_group"] : nickname || name
+  # end
 
   # simple arel attributes for testing basic functionality
-  arel_attribute(:doubled, :integer) { |t| t[:teacher_id] + t[:teacher_id] }
-  arel_attribute(:upper_name, :string) { |t| Arel::Nodes::NamedFunction.new("UPPER", [t[:name]]) }
+  arel_attribute(:doubled, :integer, ruby: true) { |t| t[:teacher_id] + t[:teacher_id] }
+  arel_attribute(:upper_name, :string, ruby: true) { |t| Arel::Nodes::NamedFunction.new("UPPER", [t[:name]]) }
 
   # arel attribute with grouping wrapping
-  arel_attribute(:nick_or_name, :string) do |t|
+  arel_attribute(:nick_or_name, :string, ruby: true) do |t|
     t.grouping(Arel::Nodes::NamedFunction.new("COALESCE", [t[:nickname], t[:name]]))
   end
 
-  # arel attribute without grouping — tests that non-Grouping arel nodes work
-  arel_attribute(:name_no_group, :string) do |t|
+  # arel attribute without grouping — tests that non-Grouping arel nodes work.
+  # Uses ruby: "..." string form instead of ruby: true to exercise that path.
+  arel_attribute(:name_no_group, :string, ruby: "nickname || name") do |t|
     Arel::Nodes::NamedFunction.new("COALESCE", [t[:nickname], t[:name]])
   end
 
