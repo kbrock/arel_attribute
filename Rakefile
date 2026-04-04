@@ -24,6 +24,11 @@ RSpec::Core::RakeTask.new(:spec) do |task|
   task.pattern = "spec/*_spec.rb"
 end
 
+desc "Run brakeman security scanner"
+task :brakeman do
+  sh "bundle exec brakeman --force --quiet --no-pager"
+end
+
 # require "standard/rake"
 
 task default: :spec # %i[spec standard]

@@ -82,3 +82,16 @@ jobs:
       env:
         DB: mysql2
       run: bundle exec rake db:create spec
+
+  brakeman:
+    runs-on: ubuntu-latest
+    name: brakeman
+    steps:
+    - uses: actions/checkout@v6
+    - name: Setup Ruby
+      uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: "3.3"
+        bundler-cache: true
+    - name: run brakeman
+      run: bundle exec rake brakeman
