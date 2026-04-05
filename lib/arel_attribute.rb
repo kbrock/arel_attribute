@@ -16,4 +16,5 @@ module ArelAttribute
   class Error < StandardError; end
 end
 
+require "arel_attribute/arel_ruby"
 require "arel_attribute/base"
